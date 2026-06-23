@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+coverage/
+
+# TypeScript build artifacts in src/
+packages/*/src/*.js
+packages/*/src/*.d.ts
+packages/*/src/*.d.ts.map
+packages/*/src/*.js.map
+packages/*/tsconfig.tsbuildinfo
+
+# Local config and data
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Logs
+*.log
+logs/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+*key* 

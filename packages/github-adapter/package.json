@@ -1,0 +1,19 @@
+{
+  "name": "@meta-agent/github-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@meta-agent/core": "workspace:*",
+    "@meta-agent/hermes": "workspace:*",
+    "@meta-agent/jira-adapter": "workspace:*",
+    "@meta-agent/plan-parser": "workspace:*",
+    "@meta-agent/storage": "workspace:*"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@meta-agent/work-catalog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@meta-agent/config": "workspace:*",
+    "@meta-agent/confluence-adapter": "workspace:*",
+    "@meta-agent/github-adapter": "workspace:*",
+    "@meta-agent/jira-adapter": "workspace:*",
+    "@meta-agent/llm-client": "workspace:*",
+    "@meta-agent/hermes": "workspace:*",
+    "@meta-agent/storage": "workspace:*"
+  }
+}

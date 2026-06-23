@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779198458064,
+      "tag": "0000_huge_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779258413453,
+      "tag": "0001_spotty_deathstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780308000000,
+      "tag": "0002_loose_blockers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780308100000,
+      "tag": "0003_cross_source_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781781356509,
+      "tag": "0004_easy_pretty_boy",
+      "breakpoints": true
+    }
+  ]
+}

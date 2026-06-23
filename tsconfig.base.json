@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@meta-agent/config": ["packages/config/src/index.ts"],
+      "@meta-agent/confluence-adapter": ["packages/confluence-adapter/src/index.ts"],
+      "@meta-agent/core": ["packages/core/src/index.ts"],
+      "@meta-agent/github": ["packages/github/src/index.ts"],
+      "@meta-agent/github-adapter": ["packages/github-adapter/src/index.ts"],
+      "@meta-agent/hermes": ["packages/hermes/src/index.ts"],
+      "@meta-agent/jira-adapter": ["packages/jira-adapter/src/index.ts"],
+      "@meta-agent/llm-client": ["packages/llm-client/src/index.ts"],
+      "@meta-agent/plan-parser": ["packages/plan-parser/src/index.ts"],
+      "@meta-agent/storage": ["packages/storage/src/index.ts"],
+      "@meta-agent/storage/test-utils": ["packages/storage/src/test-utils.ts"],
+      "@meta-agent/work-catalog": ["packages/work-catalog/src/index.ts"]
+    },
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist"
+  },
+  "exclude": ["**/*.test.ts"]
+}

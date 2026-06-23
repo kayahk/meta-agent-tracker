@@ -1,0 +1,42 @@
+{
+  "name": "meta-agent",
+  "version": "0.1.0",
+  "description": "Local-first work observability service with pluggable source adapters and a normalized work ledger.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "dev:api": "pnpm --filter @meta-agent/api dev",
+    "dev:worker": "pnpm --filter @meta-agent/worker dev",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "pnpm --filter @meta-agent/storage migrate",
+    "agent:event": "node scripts/send-agent-event.mjs",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "test": "pnpm build && vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.1",
+    "drizzle-kit": "^0.31.8",
+    "prettier": "^3.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^5.6.2",
+    "pino": "^10.1.0",
+    "zod": "^4.1.13"
+  }
+}

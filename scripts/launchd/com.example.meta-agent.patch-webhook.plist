@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>de.example.meta-agent.patch-webhook</string>
+  <key>ProgramArguments</key><array><string>__META_AGENT_REPO__/scripts/supervisor/patch-current-webhook.sh</string></array>
+  <key>WorkingDirectory</key><string>__META_AGENT_REPO__</string>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>60</integer>
+  <key>StandardOutPath</key><string>__META_AGENT_REPO__/logs/supervisor/patch-webhook.out.log</string>
+  <key>StandardErrorPath</key><string>__META_AGENT_REPO__/logs/supervisor/patch-webhook.err.log</string>
+</dict></plist>

@@ -1,0 +1,21 @@
+{
+  "name": "@meta-agent/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@meta-agent/config": "workspace:*",
+    "@meta-agent/github": "workspace:*",
+    "@meta-agent/github-adapter": "workspace:*",
+    "@meta-agent/hermes": "workspace:*",
+    "@meta-agent/jira-adapter": "workspace:*",
+    "@meta-agent/storage": "workspace:*"
+  }
+}

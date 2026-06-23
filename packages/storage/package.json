@@ -1,0 +1,30 @@
+{
+  "name": "@meta-agent/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./test-utils": {
+      "development": "./src/test-utils.ts",
+      "types": "./dist/test-utils.d.ts",
+      "default": "./dist/test-utils.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@meta-agent/config": "workspace:*",
+    "better-sqlite3": "^12.5.0",
+    "drizzle-orm": "^0.45.0"
+  }
+}

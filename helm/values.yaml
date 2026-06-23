@@ -1,0 +1,262 @@
+# Base values for meta-agent deployment using generic-service-chart
+#
+# Single-pod deployment with two containers:
+#   - API:    FastAPI webhook receiver (main container, port 4317)
+#   - Worker: Periodic scan + digest delivery (sidecar)
+#
+# Release name: meta-agent-api
+
+# ─── Application metadata ───────────────────────────────────────────────
+app:
+  name: "meta-agent"
+  version: "0.1.0"
+  environment: "dev"
+  team: "engineering"
+
+# ─── Image ──────────────────────────────────────────────────────────────
+image:
+  repository: "registry.example.com/meta-agent"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# ─── Container (shared) ────────────────────────────────────────────────
+container:
+  workingDir: "/app"
+  ports:
+    - name: http
+      port: 4317
+      protocol: TCP
+  env:
+    - name: "META_AGENT_LOG_LEVEL"
+      value: "info"
+    - name: "META_AGENT_API_HOST"
+      value: "0.0.0.0"
+    - name: "META_AGENT_DATABASE_URL"
+      value: "/data/meta-agent.sqlite"
+  envFromSecret:
+    - name: "META_AGENT_HERMES_ENDPOINT"
+      key: "hermes-endpoint"
+    - name: "META_AGENT_HERMES_WEBHOOK_SECRET"
+      key: "hermes-webhook-secret"
+    - name: "META_AGENT_AGENT_EVENT_TOKEN"
+      key: "agent-event-token"
+    - name: "META_AGENT_GITHUB_APP_ID"
+      key: "github-app-id"
+    - name: "META_AGENT_GITHUB_PRIVATE_KEY_PATH"
+      key: "github-private-key-path"
+    - name: "META_AGENT_GITHUB_WEBHOOK_SECRET"
+      key: "github-webhook-secret"
+    - name: "META_AGENT_GITHUB_INSTALLATION_ID"
+      key: "github-installation-id"
+    - name: "META_AGENT_GITHUB_REPOSITORIES"
+      key: "github-repositories"
+    - name: "META_AGENT_GITHUB_ASSIGNED_TO"
+      key: "github-assigned-to"
+    - name: "META_AGENT_JIRA_URL"
+      key: "jira-url"
+    - name: "META_AGENT_JIRA_EMAIL"
+      key: "jira-email"
+    - name: "META_AGENT_JIRA_PAT"
+      key: "jira-pat"
+    - name: "META_AGENT_CONFLUENCE_URL"
+      key: "confluence-url"
+    - name: "META_AGENT_CONFLUENCE_PAT"
+      key: "confluence-pat"
+    - name: "META_AGENT_CONFLUENCE_SPACES"
+      key: "confluence-spaces"
+    - name: "META_AGENT_LLM_API_URL"
+      key: "llm-api-url"
+    - name: "META_AGENT_LLM_API_KEY"
+      key: "llm-api-key"
+    - name: "META_AGENT_LLM_MODEL"
+      key: "llm-model"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+# ─── API Deployment ────────────────────────────────────────────────────
+deployment:
+  enabled: true # Set to false for worker release
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  # Writable volume for SQLite database
+  volumes:
+    - name: data-volume
+      emptyDir: {}
+    - name: tmp-volume
+      emptyDir: {}
+  volumeMounts:
+    - name: data-volume
+      mountPath: /data
+    - name: tmp-volume
+      mountPath: /tmp
+
+# ─── API Service ───────────────────────────────────────────────────────
+service:
+  enabled: true
+  services:
+    - nameSuffix: http
+      type: ClusterIP
+      ports:
+        - name: http
+          port: 4317
+          targetPort: 4317
+          protocol: TCP
+
+# ─── API Container probes ──────────────────────────────────────────────
+container.livenessProbe:
+  httpGet:
+    path: /health
+    port: 4317
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+container.readinessProbe:
+  httpGet:
+    path: /health
+    port: 4317
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ─── Worker (sidecar container) ────────────────────────────────────────
+# Runs as a sidecar alongside the API in the same pod.
+# Scans the work catalog and delivers digest to Hermes.
+deployment.sidecarContainers:
+  - name: worker
+    image: "registry.example.com/meta-agent:latest"
+    imagePullPolicy: "IfNotPresent"
+    command:
+      - "sh"
+      - "-c"
+      - |
+        while true; do
+          node apps/worker/dist/index.js
+          sleep 1800
+        done
+    workingDir: "/app"
+    env:
+      - name: "META_AGENT_LOG_LEVEL"
+        value: "info"
+      - name: "META_AGENT_DATABASE_URL"
+        value: "/data/meta-agent.sqlite"
+    # Raw K8s envFrom — sidecars don't get chart's envFromSecret transformation
+    # Secret name follows chart convention: {fullname}-secret
+    envFrom:
+      - secretRef:
+          name: "meta-agent-api-secret"
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    volumeMounts:
+      - name: data-volume
+        mountPath: /data
+      - name: tmp-volume
+        mountPath: /tmp
+
+# ─── HTTPRoute (Gateway API) ──────────────────────────────────────────
+# Uses the shared edge-gateway for webhook reception.
+httproute:
+  enabled: true
+  httproutes:
+    - name: api-route
+      parentRefs:
+        - name: edge-gateway
+          namespace: ingress-system
+      hostnames:
+        - "meta-agent.example.com"
+      rules:
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /
+          backendRefs:
+            - name: meta-agent-http
+              port: 4317
+
+# ─── Network Policy (Cilium) ──────────────────────────────────────────
+networkPolicy:
+  enabled: true
+  # Auto-generated rules: edge-gateway ingress + DNS egress
+  # Additional egress: GitHub API, Jira, Confluence, Hermes, LLM
+  ingress: []
+  egress:
+    # Allow outbound to GitHub, Jira, Confluence, Hermes, LLM APIs (HTTPS)
+    - toEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+
+# ─── Secret ────────────────────────────────────────────────────────────
+secret:
+  enabled: true
+  type: Opaque
+  stringData:
+    hermes-endpoint: ""
+    hermes-webhook-secret: ""
+    agent-event-token: ""
+    github-app-id: ""
+    github-private-key-path: "/secrets/github-key.pem"
+    github-webhook-secret: ""
+    github-installation-id: ""
+    github-repositories: "example-org/meta-agent-tracker"
+    github-assigned-to: ""
+    jira-url: ""
+    jira-email: ""
+    jira-pat: ""
+    confluence-url: ""
+    confluence-pat: ""
+    confluence-spaces: ""
+    llm-api-url: ""
+    llm-api-key: ""
+    llm-model: ""
+  annotations: {}
+  labels: {}
+
+# ─── Labels & Annotations ──────────────────────────────────────────────
+labels:
+  app.kubernetes.io/component: "api"
+  app.kubernetes.io/part-of: "meta-agent"
+
+annotations:
+  meta.helm.sh/release-name: "meta-agent"
+  meta.helm.sh/release-namespace: "meta-agent"

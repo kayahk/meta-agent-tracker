@@ -1,0 +1,39 @@
+# Environment overrides for meta-agent
+# Applied on top of values.yaml
+
+app:
+  environment: "dev"
+
+image:
+  tag: "latest"
+  pullPolicy: Always
+
+deployment:
+  replicas: 1
+  priorityClassName: ""
+
+# ─── Hostname / Ingress ───────────────────────────────────────────────
+httproute:
+  hostnames:
+    - "meta-agent.example.com"
+
+# ─── Secrets (override for each environment) ──────────────────────────
+secret:
+  stringData:
+    hermes-endpoint: ""
+    hermes-webhook-secret: ""
+    github-app-id: "<github-app-id>"
+    github-private-key-path: "/secrets/github-key.pem"
+    github-webhook-secret: ""
+    github-installation-id: "<github-installation-id>"
+    github-repositories: "example-org/meta-agent-tracker"
+    github-assigned-to: "example-user"
+    jira-url: ""
+    jira-email: ""
+    jira-pat: ""
+    confluence-url: ""
+    confluence-pat: ""
+    confluence-spaces: ""
+    llm-api-url: ""
+    llm-api-key: ""
+    llm-model: ""

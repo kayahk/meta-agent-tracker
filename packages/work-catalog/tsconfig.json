@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/storage" },
+    { "path": "../../packages/confluence-adapter" },
+    { "path": "../../packages/github-adapter" },
+    { "path": "../../packages/jira-adapter" },
+    { "path": "../../packages/llm-client" },
+    { "path": "../../packages/hermes" }
+  ]
+}

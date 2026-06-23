@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/confluence-adapter" },
+    { "path": "./packages/core" },
+    { "path": "./packages/github" },
+    { "path": "./packages/storage" },
+    { "path": "./packages/hermes" },
+    { "path": "./packages/plan-parser" },
+    { "path": "./packages/github-adapter" },
+    { "path": "./packages/jira-adapter" },
+    { "path": "./packages/llm-client" },
+    { "path": "./packages/work-catalog" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" }
+  ]
+}

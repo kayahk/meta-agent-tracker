@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/config" },
+    { "path": "../../packages/github" },
+    { "path": "../../packages/github-adapter" },
+    { "path": "../../packages/jira-adapter" },
+    { "path": "../../packages/plan-parser" },
+    { "path": "../../packages/storage" }
+  ]
+}
