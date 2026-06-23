@@ -74,6 +74,12 @@ Health check:
 curl -s http://127.0.0.1:4317/health
 ```
 
+Demo the product without live integrations:
+
+- Browser page: <http://127.0.0.1:4317/demo/notifications>
+- JSON payloads: <http://127.0.0.1:4317/api/demo/notifications>
+- Walkthrough: [`docs/DEMO_NOTIFICATIONS.md`](docs/DEMO_NOTIFICATIONS.md)
+
 ## Configuration
 
 All configuration is runtime-provided. Do not commit `.env`, private keys, tokens, webhook secrets, SQLite databases, or logs.
