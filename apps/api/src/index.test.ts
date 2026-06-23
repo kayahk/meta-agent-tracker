@@ -55,6 +55,29 @@ describe("api", () => {
     expect(response.body).toContain("/health");
   });
 
+  it("serves static de-personalized demo notifications", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "meta-agent-api-"));
+    process.env.META_AGENT_DATABASE_URL = join(directory, "demo-notifications.sqlite");
+
+    const { app } = await buildServer({ logger: false });
+    const html = await app.inject({ method: "GET", url: "/demo/notifications" });
+    const json = await app.inject({ method: "GET", url: "/api/demo/notifications" });
+
+    await app.close();
+    expect(html.statusCode).toBe(200);
+    expect(html.headers["content-type"]).toContain("text/html");
+    expect(html.body).toContain("Demo notifications");
+    expect(html.body).toContain("PR opened: Add checkout session audit trail");
+    expect(html.body).toContain("Requirement drift: API rate limit changed while PR is active");
+    expect(html.body).toContain("example-org/commerce-api");
+    expect(json.statusCode).toBe(200);
+    expect(json.json()).toMatchObject({ ok: true, count: 8 });
+    const privateCompanyPattern = new RegExp(["sie", "dle"].join(""), "i");
+    const privateOrgPattern = new RegExp(["sie", "dle", "group"].join(""), "i");
+    expect(json.body).not.toMatch(privateCompanyPattern);
+    expect(json.body).not.toMatch(privateOrgPattern);
+  });
+
   it("reports health with the configured database", async () => {
     const directory = mkdtempSync(join(tmpdir(), "meta-agent-api-"));
     process.env.META_AGENT_DATABASE_URL = join(directory, "health.sqlite");

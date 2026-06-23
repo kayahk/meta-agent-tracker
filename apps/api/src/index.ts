@@ -23,6 +23,7 @@ import {
   JIRA_WEBHOOK_SECRET_HEADER,
   type JiraClient
 } from "@meta-agent/jira-adapter";
+import { demoNotifications, renderDemoNotificationsPage } from "./demo-notifications.js";
 
 export interface BuildServerOptions {
   logger?: boolean;
@@ -163,6 +164,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
       <p>The local API is running.</p>
       <p>
         Status overview: <a href="/status"><code>/status</code></a><br />
+        Demo notifications: <a href="/demo/notifications"><code>/demo/notifications</code></a><br />
         Dashboard: <a href="/dashboard"><code>/dashboard</code></a><br />
         Health: <a href="/health"><code>/health</code></a><br />
         API health: <a href="/api/health"><code>/api/health</code></a>
@@ -177,6 +179,17 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.get("/health", health);
   app.get("/api/health", health);
+
+  app.get("/demo/notifications", async (_request, reply) => {
+    reply.type("text/html; charset=utf-8");
+    return renderDemoNotificationsPage();
+  });
+
+  app.get("/api/demo/notifications", async () => ({
+    ok: true,
+    count: demoNotifications.length,
+    notifications: demoNotifications
+  }));
 
   // ── Dashboard ──────────────────────────────────────────────────
 
