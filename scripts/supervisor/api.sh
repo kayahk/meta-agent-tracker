@@ -14,4 +14,5 @@ if [[ ! -f apps/api/dist/index.js ]]; then
   echo "$(date -Is) api dist missing; building first" >&2
   pnpm build
 fi
+scripts/supervisor/ensure-db-migrated.sh
 exec node apps/api/dist/index.js

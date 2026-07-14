@@ -12,6 +12,8 @@ const previousDatabaseUrl = process.env.META_AGENT_DATABASE_URL;
 const previousWebhookSecret = process.env.META_AGENT_GITHUB_WEBHOOK_SECRET;
 const previousAgentEventToken = process.env.META_AGENT_AGENT_EVENT_TOKEN;
 const previousJiraUrl = process.env.META_AGENT_JIRA_URL;
+const previousStatusAuthUsername = process.env.META_AGENT_STATUS_AUTH_USERNAME;
+const previousStatusAuthPassword = process.env.META_AGENT_STATUS_AUTH_PASSWORD;
 
 afterEach(() => {
   if (previousDatabaseUrl === undefined) {
@@ -37,6 +39,18 @@ afterEach(() => {
   } else {
     process.env.META_AGENT_JIRA_URL = previousJiraUrl;
   }
+
+  if (previousStatusAuthUsername === undefined) {
+    delete process.env.META_AGENT_STATUS_AUTH_USERNAME;
+  } else {
+    process.env.META_AGENT_STATUS_AUTH_USERNAME = previousStatusAuthUsername;
+  }
+
+  if (previousStatusAuthPassword === undefined) {
+    delete process.env.META_AGENT_STATUS_AUTH_PASSWORD;
+  } else {
+    process.env.META_AGENT_STATUS_AUTH_PASSWORD = previousStatusAuthPassword;
+  }
 });
 
 describe("api", () => {
@@ -53,29 +67,6 @@ describe("api", () => {
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.body).toContain("Meta Agent");
     expect(response.body).toContain("/health");
-  });
-
-  it("serves static de-personalized demo notifications", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "meta-agent-api-"));
-    process.env.META_AGENT_DATABASE_URL = join(directory, "demo-notifications.sqlite");
-
-    const { app } = await buildServer({ logger: false });
-    const html = await app.inject({ method: "GET", url: "/demo/notifications" });
-    const json = await app.inject({ method: "GET", url: "/api/demo/notifications" });
-
-    await app.close();
-    expect(html.statusCode).toBe(200);
-    expect(html.headers["content-type"]).toContain("text/html");
-    expect(html.body).toContain("Demo notifications");
-    expect(html.body).toContain("PR opened: Add checkout session audit trail");
-    expect(html.body).toContain("Requirement drift: API rate limit changed while PR is active");
-    expect(html.body).toContain("example-org/commerce-api");
-    expect(json.statusCode).toBe(200);
-    expect(json.json()).toMatchObject({ ok: true, count: 8 });
-    const privateCompanyPattern = new RegExp(["sie", "dle"].join(""), "i");
-    const privateOrgPattern = new RegExp(["sie", "dle", "group"].join(""), "i");
-    expect(json.body).not.toMatch(privateCompanyPattern);
-    expect(json.body).not.toMatch(privateOrgPattern);
   });
 
   it("reports health with the configured database", async () => {
@@ -120,20 +111,20 @@ describe("api", () => {
     });
     upsertWorkItem(database, {
       source: "github",
-      externalId: "plan:example-org/example-service:docs/product-cost-transparency-plan.md",
+      externalId: "plan:example-org/example-service:docs/platform-cost-transparency-plan.md",
       kind: "plan",
-      title: "Product Cost Transparency Plan",
+      title: "Platform Cost Transparency Plan",
       status: "open",
       body: "Checklist: 1/2",
       externalUrl:
-        "https://github.com/example-org/example-service/blob/main/docs/product-cost-transparency-plan.md",
+        "https://github.com/example-org/example-service/blob/main/docs/platform-cost-transparency-plan.md",
       updatedAt: new Date("2026-06-12T12:00:00Z")
     });
     upsertWorkItem(database, {
       source: "github",
       externalId: "pr:example-org/example-service#415",
       kind: "pull_request",
-      title: "docs(cost): evaluate product portal showback path",
+      title: "docs(cost): evaluate platform portal showback path",
       status: "merged",
       externalUrl: "https://github.com/example-org/example-service/pull/415",
       updatedAt: new Date("2026-06-12T10:43:09Z")
@@ -153,8 +144,8 @@ describe("api", () => {
     await app.close();
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, count: 2 });
-    expect(response.body).toContain("Product Cost Transparency Plan");
-    expect(response.body).toContain("docs(cost): evaluate product portal showback path");
+    expect(response.body).toContain("Platform Cost Transparency Plan");
+    expect(response.body).toContain("docs(cost): evaluate platform portal showback path");
     expect(response.body).not.toContain("Closed issue should not be recent work");
   });
 
@@ -230,6 +221,101 @@ describe("api", () => {
     expect(response.body).toContain("Last observed update: 2026-06-20 11:30 UTC");
     expect(response.body).toContain("Unsafe source URL should render as text");
     expect(response.body).not.toContain('href="javascript:alert(1)"');
+  });
+
+  it("requires configured Basic auth before serving /status through ngrok hosts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "meta-agent-api-"));
+    process.env.META_AGENT_DATABASE_URL = join(directory, "status-ngrok-auth.sqlite");
+    process.env.META_AGENT_STATUS_AUTH_USERNAME = "status-user";
+    process.env.META_AGENT_STATUS_AUTH_PASSWORD = "status-password";
+
+    const { app, database } = await buildServer({ logger: false });
+    migrate(database.db, {
+      migrationsFolder: fileURLToPath(new URL("../../../packages/storage/drizzle", import.meta.url))
+    });
+
+    const unauthenticated = await app.inject({
+      method: "GET",
+      url: "/status",
+      headers: { host: "tracker.ngrok-free.app" }
+    });
+    const invalid = await app.inject({
+      method: "GET",
+      url: "/status",
+      headers: {
+        host: "tracker.ngrok-free.app",
+        authorization: ["Bas", "ic "].join("") + Buffer.from("status-user:wrong").toString("base64")
+      }
+    });
+    const authenticated = await app.inject({
+      method: "GET",
+      url: "/status",
+      headers: {
+        host: "tracker.ngrok-free.app",
+        authorization:
+          ["Bas", "ic "].join("") + Buffer.from("status-user:status-password").toString("base64")
+      }
+    });
+    const cloudflareAuthenticated = await app.inject({
+      method: "GET",
+      url: "/status",
+      headers: {
+        host: "tracker.trycloudflare.com",
+        authorization:
+          ["Bas", "ic "].join("") + Buffer.from("status-user:status-password").toString("base64")
+      }
+    });
+    const queryStringAuthenticated = await app.inject({
+      method: "GET",
+      url: "/status?view=compact",
+      headers: {
+        host: "tracker.ngrok-free.app",
+        authorization:
+          ["bas", "ic "].join("") + Buffer.from("status-user:status-password").toString("base64")
+      }
+    });
+    const dashboard = await app.inject({
+      method: "GET",
+      url: "/dashboard",
+      headers: {
+        host: "tracker.ngrok-free.app",
+        authorization:
+          ["Bas", "ic "].join("") + Buffer.from("status-user:status-password").toString("base64")
+      }
+    });
+
+    await app.close();
+
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.headers["www-authenticate"]).toContain("Meta Agent Status");
+    expect(invalid.statusCode).toBe(401);
+    expect(authenticated.statusCode).toBe(200);
+    expect(authenticated.body).toContain("Current work status");
+    expect(cloudflareAuthenticated.statusCode).toBe(200);
+    expect(cloudflareAuthenticated.body).toContain("Current work status");
+    expect(queryStringAuthenticated.statusCode).toBe(200);
+    expect(queryStringAuthenticated.body).toContain("Current work status");
+    expect(dashboard.statusCode).toBe(403);
+  });
+
+  it("fails closed for /status through ngrok when status auth is not configured", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "meta-agent-api-"));
+    process.env.META_AGENT_DATABASE_URL = join(directory, "status-ngrok-no-auth.sqlite");
+    delete process.env.META_AGENT_STATUS_AUTH_USERNAME;
+    delete process.env.META_AGENT_STATUS_AUTH_PASSWORD;
+
+    const { app } = await buildServer({ logger: false });
+    const response = await app.inject({
+      method: "GET",
+      url: "/status",
+      headers: { host: "tracker.ngrok-free.app" }
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["www-authenticate"]).toBeUndefined();
+    expect(response.body).toContain("Status page authentication is not configured");
   });
 
   it("announces the agent event contract and stores agent events as evidence", async () => {

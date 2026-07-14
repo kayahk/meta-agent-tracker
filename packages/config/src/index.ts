@@ -12,6 +12,8 @@ const schema = z.object({
   META_AGENT_HERMES_ENDPOINT: z.string().url().optional().or(z.literal("")),
   META_AGENT_HERMES_WEBHOOK_SECRET: z.string().optional().or(z.literal("")),
   META_AGENT_AGENT_EVENT_TOKEN: z.string().optional().or(z.literal("")),
+  META_AGENT_STATUS_AUTH_USERNAME: z.string().optional().or(z.literal("")),
+  META_AGENT_STATUS_AUTH_PASSWORD: z.string().optional().or(z.literal("")),
   META_AGENT_GITHUB_APP_ID: z.string().optional().or(z.literal("")),
   META_AGENT_GITHUB_PRIVATE_KEY_PATH: z.string().optional().or(z.literal("")),
   META_AGENT_GITHUB_WEBHOOK_SECRET: z.string().optional().or(z.literal("")),
@@ -62,6 +64,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     },
     agentEvents: {
       token: parsed.META_AGENT_AGENT_EVENT_TOKEN || undefined
+    },
+    statusAuth: {
+      username: parsed.META_AGENT_STATUS_AUTH_USERNAME || undefined,
+      password: parsed.META_AGENT_STATUS_AUTH_PASSWORD || undefined
     },
     github: {
       appId: parsed.META_AGENT_GITHUB_APP_ID || undefined,

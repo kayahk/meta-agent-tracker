@@ -90,11 +90,11 @@ describe("detectConfluenceRequirementDrift", () => {
     });
     reconcileConfluenceLedger({
       db,
-      pages: [page({ body: "<p>Requirement for example-9</p>" })]
+      pages: [page({ body: "<p>Requirement for proj-9</p>" })]
     });
 
     const findings = detectConfluenceRequirementDrift(db, [
-      page({ body: "<p>Requirement for example-9</p>", version: 5 })
+      page({ body: "<p>Requirement for proj-9</p>", version: 5 })
     ]);
 
     expect(findings).toHaveLength(1);

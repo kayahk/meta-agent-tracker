@@ -21,7 +21,8 @@ last_url_file="logs/supervisor/current-public-webhook-url.txt"
 child=""
 reader=""
 tmpdir="$(mktemp -d /tmp/meta-agent-cloudflared.XXXXXX)"
-fifo="$tmpdir/cloudflared.log"
+cloudflared_log="$tmpdir/cloudflared.log"
+touch "$cloudflared_log"
 # shellcheck disable=SC2329
 cleanup() {
   if [[ -n "${child}" ]] && kill -0 "${child}" 2>/dev/null; then
@@ -36,11 +37,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-mkfifo "$fifo"
-cloudflared tunnel --url http://127.0.0.1:4318 >"$fifo" 2>&1 &
-child=$!
-
-while IFS= read -r line; do
+tail -n0 -F "$cloudflared_log" 2>/dev/null | while IFS= read -r line; do
   printf '%s %s\n' "$(ts)" "$line" | tee -a "$log"
   if [[ "$line" =~ https://[-a-zA-Z0-9]+\.trycloudflare\.com ]]; then
     tunnel_url="${BASH_REMATCH[0]}"
@@ -49,11 +46,16 @@ while IFS= read -r line; do
     if [[ "$previous" != "$webhook_url" ]]; then
       printf '%s\n' "$webhook_url" > "$last_url_file"
       echo "$(ts) recorded public webhook URL ${webhook_url}; kicking patch-webhook agent" | tee -a "$log"
-      launchctl kickstart -k "gui/$(id -u)/de.example.meta-agent.patch-webhook" >/dev/null 2>&1 || true
+      launchctl kickstart -k "gui/$(id -u)/com.example.meta-agent.patch-webhook" >/dev/null 2>&1 || true
     fi
   fi
-done < "$fifo" &
+done &
 reader=$!
+
+cloudflared tunnel --url http://127.0.0.1:4318 >>"$cloudflared_log" 2>&1 &
+child=$!
+set +e
 wait "$child"
 status=$?
+set -e
 exit "$status"

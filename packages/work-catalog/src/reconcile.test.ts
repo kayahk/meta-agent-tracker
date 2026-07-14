@@ -169,6 +169,7 @@ describe("reconcileJiraLedger", () => {
 
 describe("reconcileAgentEvidence", () => {
   it("marks PR-opened agent events as system observed when GitHub still sees the PR", () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "pr_opened",
@@ -176,7 +177,7 @@ describe("reconcileAgentEvidence", () => {
       confidence: "agent_observed",
       prUrl: "https://github.com/o/r/pull/77",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:00:00.000Z")
+      occurredAt: recent
     });
 
     const result = reconcileAgentEvidence({
@@ -193,6 +194,7 @@ describe("reconcileAgentEvidence", () => {
   });
 
   it("does not reprocess already observed PR-opened events", () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "pr_opened",
@@ -200,7 +202,7 @@ describe("reconcileAgentEvidence", () => {
       confidence: "system_observed",
       prUrl: "https://github.com/o/r/pull/77",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:00:00.000Z")
+      occurredAt: recent
     });
 
     const result = reconcileAgentEvidence({
@@ -213,6 +215,7 @@ describe("reconcileAgentEvidence", () => {
   });
 
   it("verifies completion claims only when deterministic GitHub evidence confirms them", () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "task_completed_claimed",
@@ -220,7 +223,7 @@ describe("reconcileAgentEvidence", () => {
       confidence: "agent_observed",
       prUrl: "https://github.com/o/r/pull/78",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:00:00.000Z")
+      occurredAt: recent
     });
 
     const result = reconcileAgentEvidence({
@@ -245,6 +248,8 @@ describe("reconcileAgentEvidence", () => {
   });
 
   it("verifies test-pass events from matching green workflow runs", () => {
+    const signalTime = new Date(Date.now() - 60 * 60 * 1000);
+    const runTime = new Date(signalTime.getTime() + 30 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "tests_passed",
@@ -253,7 +258,7 @@ describe("reconcileAgentEvidence", () => {
       repo: "o/r",
       branch: "feature/transparency",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:00:00.000Z")
+      occurredAt: signalTime
     });
     const runs: GitHubWorkflowRun[] = [
       {
@@ -263,7 +268,7 @@ describe("reconcileAgentEvidence", () => {
         conclusion: "success",
         status: "completed",
         htmlUrl: "https://github.com/o/r/actions/runs/1",
-        updatedAt: "2026-06-18T08:30:00.000Z"
+        updatedAt: runTime.toISOString()
       }
     ];
 
@@ -277,6 +282,8 @@ describe("reconcileAgentEvidence", () => {
   });
 
   it("verifies post-hoc test-pass events against recent green workflow runs", () => {
+    const runTime = new Date(Date.now() - 90 * 60 * 1000);
+    const signalTime = new Date(runTime.getTime() + 30 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "tests_passed",
@@ -285,7 +292,7 @@ describe("reconcileAgentEvidence", () => {
       repo: "o/r",
       branch: "feature/transparency",
       payload: {},
-      occurredAt: new Date("2026-06-18T09:00:00.000Z")
+      occurredAt: signalTime
     });
     const runs: GitHubWorkflowRun[] = [
       {
@@ -295,7 +302,7 @@ describe("reconcileAgentEvidence", () => {
         conclusion: "success",
         status: "completed",
         htmlUrl: "https://github.com/o/r/actions/runs/1",
-        updatedAt: "2026-06-18T08:30:00.000Z"
+        updatedAt: runTime.toISOString()
       }
     ];
 
@@ -309,13 +316,14 @@ describe("reconcileAgentEvidence", () => {
   });
 
   it("does not verify workflow-backed signals without repo and branch correlation", () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "tests_passed",
       task: "Ambiguous test pass",
       confidence: "agent_observed",
       payload: {},
-      occurredAt: new Date("2026-06-18T09:00:00.000Z")
+      occurredAt: recent
     });
     const runs: GitHubWorkflowRun[] = [
       {
@@ -325,7 +333,7 @@ describe("reconcileAgentEvidence", () => {
         conclusion: "success",
         status: "completed",
         htmlUrl: "https://github.com/o/r/actions/runs/1",
-        updatedAt: "2026-06-18T08:30:00.000Z"
+        updatedAt: new Date().toISOString()
       }
     ];
 
@@ -440,6 +448,30 @@ describe("buildStatusDigest", () => {
     expect(msg.body).toContain("Active work:");
   });
 
+  it("keeps plan documents out of the generic stale attention list", () => {
+    upsertWorkItem(db, {
+      source: "github",
+      externalId: "plan:o/r:docs/example-plan.md",
+      kind: "plan",
+      title: "Example implementation plan",
+      status: "open",
+      body: "Source: docs/example-plan.md\nStatus rows: 0\nChecklist: 0/0\nReferenced PRs: none",
+      externalUrl: "https://github.com/o/r/blob/main/docs/example-plan.md",
+      updatedAt: new Date("1970-01-01T00:00:00.000Z")
+    });
+
+    const msg = buildStatusDigest(db, {
+      staleDays: 2,
+      timestamp: new Date("2026-07-02T10:00:00.000Z")
+    });
+
+    expect(msg.body).toContain(
+      "*Plan-driven work:*\n- <https://github.com/o/r/blob/main/docs/example-plan.md|Example implementation plan>"
+    );
+    expect(msg.body).toContain("*Needs attention:*\n- none");
+    expect(msg.body).not.toContain("Example implementation plan> — no activity for");
+  });
+
   it("renders recent agent evidence as unverified context", () => {
     recordAgentEvent(db, {
       agent: "hermes",
@@ -450,7 +482,7 @@ describe("buildStatusDigest", () => {
       confidence: "agent_observed",
       ledgerTopic: "cnpg-database-gitops",
       repo: "example-org/example-service",
-      branch: "product-database-gitops",
+      branch: "platform-cnpg-database-gitops",
       prUrl: "https://github.com/example-org/example-service/pull/448",
       payload: { evidence: "argocd app observed healthy" },
       occurredAt: new Date()
@@ -466,13 +498,14 @@ describe("buildStatusDigest", () => {
   });
 
   it("does not list already reconciled agent evidence as awaiting verification", () => {
+    const now = Date.now();
     recordAgentEvent(db, {
       agent: "hermes",
       eventType: "runtime_verified",
       task: "Unverified runtime smoke",
       confidence: "agent_observed",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:00:00.000Z")
+      occurredAt: new Date(now - 60 * 60 * 1000)
     });
     recordAgentEvent(db, {
       agent: "hermes",
@@ -480,7 +513,7 @@ describe("buildStatusDigest", () => {
       task: "Already observed PR",
       confidence: "system_observed",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:01:00.000Z")
+      occurredAt: new Date(now - 59 * 60 * 1000)
     });
     recordAgentEvent(db, {
       agent: "hermes",
@@ -488,7 +521,7 @@ describe("buildStatusDigest", () => {
       task: "Already verified tests",
       confidence: "verified",
       payload: {},
-      occurredAt: new Date("2026-06-18T08:02:00.000Z")
+      occurredAt: new Date(now - 58 * 60 * 1000)
     });
 
     const msg = buildStatusDigest(db);

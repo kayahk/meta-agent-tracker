@@ -29,12 +29,12 @@ Achieved milestones:
 - [x] `META_AGENT_GITHUB_WEBHOOK_SECRET` configured — webhook verified.
 - [x] GitHub App private key saved to `data/github-app-private-key.pem`.
 - [x] Local `.env` created with all required config vars.
-- [x] GitHub App transferred from example-user to example-org (App ID <github-app-id>, Installation ID <github-installation-id>).
+- [x] GitHub App transferred from example-user to example-org (App ID 123456, Installation ID 123456789).
 - [x] Repository allowlist expanded to 10 repos across example-user + example-org.
 - [x] Rate limiting (30 POSTs/min per IP on `/webhooks/github`).
 - [x] Body size limit (5 MB) on webhook endpoint.
 - [x] Idempotent webhook delivery via `source_changes.idempotency_key`.
-- [x] Ngrok security: non-webhook traffic blocked via Host-header guard (dashboard/API return 403 through ngrok).
+- [x] Public tunnel security: non-webhook traffic blocked via Host-header/proxy guard (dashboard/API return 403 through ngrok/Cloudflare); `/status` may be exposed through public tunnels only with configured Basic auth.
 - [x] Phase 3: GitHub Adapter MVP — normalizes issues, PRs, workflow_runs, check_runs into work_items, blockers, plan_snapshots, milestone_events.
 - [x] Phase 4: Hermes Feed Integration — HttpHermesClient with HMAC signing, dedup via emitted_feed_messages table.
 - [x] Phase 5: Active Work Discovery — repository allowlist + assignee filter, `GET /api/active-work` and `GET /api/repos` endpoints.
@@ -48,6 +48,7 @@ Current blockers / setup items:
 - [ ] Multi-installation support for GitHub App (currently single installation under example-org; example-user meta-agent repo needs separate install or multi-ID config).
 - [ ] Jira credentials needed for real client (configuring `META_AGENT_JIRA_*` env vars + implementing `HttpJiraClient`).
 - [ ] Confirm GitHub webhook redelivery returns `202 Accepted` through the ngrok URL.
+- [ ] Configure `META_AGENT_STATUS_AUTH_USERNAME` and `META_AGENT_STATUS_AUTH_PASSWORD` in the live `.env` before browsing `/status` through the ngrok hostname.
 
 Agent/ledger transparency setup items:
 

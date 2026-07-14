@@ -66,7 +66,7 @@ Recommended fields:
   "agent": "hermes",
   "sessionId": "slack:D0B4BBN7TUK:1781763700.196349",
   "eventType": "runtime_verified",
-  "task": "Verify shared product database ApplicationSet",
+  "task": "Verify shared platform database ApplicationSet",
   "status": "claimed_complete",
   "confidence": "agent_observed",
   "correlation": {
@@ -90,12 +90,12 @@ Recommended fields:
     },
     {
       "type": "argocd_application",
-      "name": "example-product-db",
+      "name": "platform-platform-portal-db-platform",
       "sync": "Synced",
       "health": "Healthy"
     }
   ],
-  "summary": "The shared product database claim is runtime verified."
+  "summary": "The shared platform database claim is runtime verified."
 }
 ```
 
@@ -122,8 +122,8 @@ Unknown event types may be stored for forward compatibility, but dashboards shou
 
 Agents should prefer explicit metadata over inference:
 
-- Branch names should include a durable topic, e.g. `meta-status-ledger-*`, `product-db-gitops-*`, `portal-chat-*`.
-- PR titles should use scopes when practical, e.g. `meta-agent(status): ...`, `product-db(gitops): ...`, `portal(chat): ...`.
+- Branch names should include a durable topic, e.g. `meta-status-ledger-*`, `platform-cnpg-gitops-*`, `portal-chat-*`.
+- PR titles should use scopes when practical, e.g. `meta-agent(status): ...`, `platform-cnpg(gitops): ...`, `portal(chat): ...`.
 - PR bodies should include a `Meta-agent correlation` section when work maps to an existing plan.
 - Agent events should include `correlation.plan.path` and `correlation.plan.items` when known.
 - Test/runtime evidence should identify the command or external object that was checked.
@@ -139,8 +139,8 @@ Example PR section:
   - ApplicationSet implementation
   - Shared portal runtime claim
 - Verifies:
-  - ArgoCD Application `example-product-db`
-  - CNPG Database `example-product-db`
+  - ArgoCD Application `platform-platform-portal-db-platform`
+  - CNPG Database `platform-platform-portal-db-platform`
 ```
 
 ## Storage contract

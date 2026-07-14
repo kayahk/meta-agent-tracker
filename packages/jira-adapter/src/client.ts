@@ -7,7 +7,7 @@
 import type { JiraClient, JiraIssue, JiraField } from "./index.js";
 
 export interface JiraDcConfig {
-  url: string; // e.g. "https://jira.example.de"
+  url: string; // e.g. "https://jira.example.com"
   pat: string; // Personal Access Token
 }
 

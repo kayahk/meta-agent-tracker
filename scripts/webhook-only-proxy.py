@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Local webhook-only reverse proxy for public tunnels.
 
-Allows only POST /webhooks/github and forwards it to the meta-agent API on
-127.0.0.1:4317. Everything else returns 403 so a generic tunnel does not expose
-/dashboard or other local routes.
+Allows only POST /webhooks/github plus authenticated GET /status and forwards
+them to the meta-agent API on 127.0.0.1:4317. Everything else returns 403 so a
+generic tunnel does not expose /dashboard or other local routes.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import http.client
 import json
+from urllib.parse import urlsplit
 
 UPSTREAM_HOST = "127.0.0.1"
 UPSTREAM_PORT = 4317
 LISTEN_HOST = "127.0.0.1"
 LISTEN_PORT = 4318
-ALLOWED_PATH = "/webhooks/github"
+ALLOWED_WEBHOOK_PATH = "/webhooks/github"
+ALLOWED_STATUS_PATH = "/status"
+MAX_NON_WEBHOOK_DRAIN_BYTES = 64 * 1024
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -26,25 +29,63 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        self._send_json(403, b'{"ok":false,"error":"Only POST /webhooks/github is exposed"}')
+        if not self._drain_non_webhook_body():
+            return
+        if self._request_path() != ALLOWED_STATUS_PATH:
+            self._send_json(403, b'{"ok":false,"error":"Only POST /webhooks/github and GET /status are exposed"}')
+            return
+        self._proxy("GET", b"")
 
     def _read_request_body(self) -> bytes:
-        length = int(self.headers.get("content-length") or "0")
+        length = self._content_length()
         return self.rfile.read(length)
 
+    def _drain_non_webhook_body(self) -> bool:
+        length = self._content_length()
+        if length > MAX_NON_WEBHOOK_DRAIN_BYTES:
+            self.close_connection = True
+            self._send_json(413, b'{"ok":false,"error":"Request body too large"}')
+            return False
+        self.rfile.read(length)
+        return True
+
+    def _content_length(self) -> int:
+        # Only support requests with a known, non-negative Content-Length.
+        # If we can't safely determine the body length, close the connection to
+        # avoid leaving unread bytes on a keep-alive socket.
+        if self.headers.get("transfer-encoding"):
+            self.close_connection = True
+            return 0
+        try:
+            length = int(self.headers.get("content-length") or "0")
+        except ValueError:
+            self.close_connection = True
+            return 0
+        if length < 0:
+            self.close_connection = True
+            return 0
+        return length
+
     def do_POST(self):
-        if self.path != ALLOWED_PATH:
+        if self._request_path() != ALLOWED_WEBHOOK_PATH:
             # Drain the request body before responding so keep-alive clients do
             # not leave unread bytes on the connection.
-            self._read_request_body()
-            self._send_json(403, b'{"ok":false,"error":"Only POST /webhooks/github is exposed"}')
+            if not self._drain_non_webhook_body():
+                return
+            self._send_json(403, b'{"ok":false,"error":"Only POST /webhooks/github and GET /status are exposed"}')
             return
         body = self._read_request_body()
-        headers = {k: v for k, v in self.headers.items() if k.lower() not in {"host", "connection", "content-length"}}
+        self._proxy("POST", body)
+
+    def _request_path(self) -> str:
+        return urlsplit(self.path).path
+
+    def _proxy(self, method: str, body: bytes):
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in {"connection", "content-length"}}
         headers["Content-Length"] = str(len(body))
         conn = http.client.HTTPConnection(UPSTREAM_HOST, UPSTREAM_PORT, timeout=15)
         try:
-            conn.request("POST", self.path, body=body, headers=headers)
+            conn.request(method, self.path, body=body, headers=headers)
             resp = conn.getresponse()
             data = resp.read()
             self.send_response(resp.status, resp.reason)
@@ -65,5 +106,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
-    print(f"webhook-only proxy listening on http://{LISTEN_HOST}:{LISTEN_PORT} -> http://{UPSTREAM_HOST}:{UPSTREAM_PORT}{ALLOWED_PATH}", flush=True)
+    print(f"webhook/status proxy listening on http://{LISTEN_HOST}:{LISTEN_PORT} -> http://{UPSTREAM_HOST}:{UPSTREAM_PORT}", flush=True)
     server.serve_forever()

@@ -1,6 +1,6 @@
 # Helm Configuration
 
-Values files for deploying **meta-agent** with `generic-service-chart`.
+Values files for deploying **meta-agent** with `proj-common-helm-chart`.
 
 ## Architecture
 
@@ -23,10 +23,10 @@ helm/
 
 ## Deployment
 
-Single Helm release using `example-common` chart:
+Single Helm release using `proj-common` chart:
 
 ```bash
-helm install meta-agent-api oci://registry.example.com/helm/example-common \
+helm install meta-agent-api oci://registry.example.com/helm/proj-common \
   -f helm/values.yaml \
   -f helm/values-api.yaml \
   -n meta-agent
@@ -38,8 +38,8 @@ Or via ArgoCD ApplicationSet:
 template:
   spec:
     sources:
-      - repoURL: "oci://registry.example.com/helm/example-common"
-        chart: example-common
+      - repoURL: "oci://registry.example.com/helm/proj-common"
+        chart: proj-common
         helm:
           valueFiles:
             - $values/helm/values.yaml
@@ -77,21 +77,21 @@ Create a K8s Secret with these keys before deploying:
 
 ```yaml
 hermes-endpoint: "https://hermes.example.com"
-hermes-webhook-secret: "<set-with-secret-manager>"
-github-app-id: "<github-app-id>"
+hermes-webhook-secret: "xxx"
+github-app-id: "123456"
 github-private-key-path: "/secrets/github-key.pem"
-github-webhook-secret: "<set-with-secret-manager>"
-github-installation-id: "<github-installation-id>"
+github-webhook-secret: "xxx"
+github-installation-id: "123456789"
 github-repositories: "example-org/meta-agent-tracker"
 github-assigned-to: "username"
 jira-url: "https://jira.example.com"
 jira-email: "user@example.com"
-jira-pat: "<set-with-secret-manager>"
+jira-pat: "xxx"
 confluence-url: "https://confluence.example.com"
-confluence-pat: "<set-with-secret-manager>"
+confluence-pat: "xxx"
 confluence-spaces: "SPACE1,SPACE2"
 llm-api-url: "https://api.example.com"
-llm-api-key: "<set-with-secret-manager>"
+llm-api-key: "xxx"
 llm-model: "anthropic/claude-sonnet-4"
 ```
 

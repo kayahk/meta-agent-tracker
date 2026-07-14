@@ -19,7 +19,7 @@ describe("confluence-adapter", () => {
       body: "See https://github.com/example-org/meta-agent-tracker/pull/8",
       version: 7,
       updatedAt: new Date("2026-06-20T12:00:00Z"),
-      updatedBy: "Hakan Kaya",
+      updatedBy: "Example User",
       labels: ["architecture-decision"]
     });
 
@@ -28,7 +28,7 @@ describe("confluence-adapter", () => {
       externalId: "page:123",
       kind: "adr",
       status: "v7",
-      owner: "Hakan Kaya"
+      owner: "Example User"
     });
     expect(item.links).toEqual(
       expect.arrayContaining([
@@ -45,7 +45,7 @@ describe("confluence-adapter", () => {
     expect(
       classifyConfluencePage({
         id: "1",
-        title: "Acceptance Criteria for Product Status",
+        title: "Acceptance Criteria for Platform Status",
         url: "https://example.test/1",
         updatedAt: new Date()
       })

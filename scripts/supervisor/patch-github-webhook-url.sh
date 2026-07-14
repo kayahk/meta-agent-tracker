@@ -7,6 +7,15 @@ fi
 public_url="$1"
 : "${META_AGENT_GITHUB_APP_ID:?META_AGENT_GITHUB_APP_ID must be set}"
 : "${META_AGENT_GITHUB_PRIVATE_KEY_PATH:?META_AGENT_GITHUB_PRIVATE_KEY_PATH must be set}"
+if [[ ! -f "$META_AGENT_GITHUB_PRIVATE_KEY_PATH" ]]; then
+  echo "GitHub App private key not found: $META_AGENT_GITHUB_PRIVATE_KEY_PATH" >&2
+  exit 1
+fi
+key_mode="$(stat -f '%Lp' "$META_AGENT_GITHUB_PRIVATE_KEY_PATH" 2>/dev/null || stat -c '%a' "$META_AGENT_GITHUB_PRIVATE_KEY_PATH")"
+if (( (8#$key_mode) & 077 )); then
+  echo "refusing GitHub App private key with group/other permission bits: $META_AGENT_GITHUB_PRIVATE_KEY_PATH mode $key_mode" >&2
+  exit 1
+fi
 
 b64url() {
   base64 | tr '+/' '-_' | tr -d '=\n'

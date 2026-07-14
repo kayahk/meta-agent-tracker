@@ -1,9 +1,7 @@
 {
   "name": "meta-agent",
   "version": "0.1.0",
-  "description": "Local-first work observability service with pluggable source adapters and a normalized work ledger.",
-  "license": "MIT",
-  "private": false,
+  "private": true,
   "type": "module",
   "packageManager": "pnpm@11.1.1",
   "engines": {

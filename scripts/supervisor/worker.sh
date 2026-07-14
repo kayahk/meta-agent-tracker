@@ -14,4 +14,5 @@ if [[ ! -f apps/worker/dist/index.js ]]; then
   echo "$(date -Is) worker dist missing; building first" >&2
   pnpm build
 fi
+scripts/supervisor/ensure-db-migrated.sh
 exec node apps/worker/dist/index.js
