@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Public-safety scan
+        run: node scripts/check-public-safety.mjs
+
       - name: Type-check
         run: pnpm check
 
