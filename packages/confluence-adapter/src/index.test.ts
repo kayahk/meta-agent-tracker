@@ -14,8 +14,8 @@ describe("confluence-adapter", () => {
     const item = normalizeConfluencePage({
       id: "123",
       spaceKey: "PROJ",
-      title: "ADR: HolmesGPT rollout references PROJ-42",
-      url: "https://confluence.example.com/display/PROJ/HolmesGPT",
+      title: "ADR: Example Assistant rollout references PROJ-42",
+      url: "https://confluence.example.com/display/PROJ/ExampleAssistant",
       body: "See https://github.com/example-org/meta-agent-tracker/pull/8",
       version: 7,
       updatedAt: new Date("2026-06-20T12:00:00Z"),
@@ -173,7 +173,7 @@ describe("confluence-adapter", () => {
         url: "https://confluence.example.com",
         pat: "secret"
       });
-      const pages = await client.searchPages({ text: "HolmesGPT", limit: 150 });
+      const pages = await client.searchPages({ text: "Example Assistant", limit: 150 });
 
       expect(pages).toHaveLength(150);
       expect(fetchMock).toHaveBeenCalledTimes(2);

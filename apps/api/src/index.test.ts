@@ -160,20 +160,20 @@ describe("api", () => {
     });
     upsertWorkItem(database, {
       source: "github",
-      externalId: "plan:example-org/example-service:docs/portal-holmesgpt-plan.md",
+      externalId: "plan:example-org/example-service:docs/portal-example-assistant-plan.md",
       kind: "plan",
-      title: "Portal HolmesGPT Plan",
+      title: "Portal Example Assistant Plan",
       status: "open",
       body: "Checklist: 2/5",
       externalUrl:
-        "https://github.com/example-org/example-service/blob/main/docs/portal-holmesgpt-plan.md",
+        "https://github.com/example-org/example-service/blob/main/docs/portal-example-assistant-plan.md",
       updatedAt: new Date("2026-06-20T09:00:00Z")
     });
     upsertWorkItem(database, {
       source: "github",
       externalId: "pr:example-org/example-service#515",
       kind: "pull_request",
-      title: "feat(portal): expose HolmesGPT overview",
+      title: "feat(portal): expose Example Assistant overview",
       status: "open",
       externalUrl: "https://github.com/example-org/example-service/pull/515",
       updatedAt: new Date("2026-06-20T09:30:00Z")
@@ -182,7 +182,7 @@ describe("api", () => {
       source: "jira",
       externalId: "issue:PROJ-42",
       kind: "task",
-      title: "PROJ-42 Track HolmesGPT rollout",
+      title: "PROJ-42 Track Example Assistant rollout",
       status: "open",
       externalUrl: "https://jira.example.test/browse/PROJ-42",
       updatedAt: new Date("2026-06-20T08:30:00Z")
@@ -212,7 +212,7 @@ describe("api", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.body).toContain("Current work status");
-    expect(response.body).toContain("Portal HolmesGPT Plan");
+    expect(response.body).toContain("Portal Example Assistant Plan");
     expect(response.body).toContain("Implementation plan");
     expect(response.body).toContain("Pull request");
     expect(response.body).toContain("GitHub Actions");

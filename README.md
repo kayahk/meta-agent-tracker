@@ -1,274 +1,199 @@
-# Meta Agent
+# Meta-Agent Tracker
 
-Meta Agent is a local work-observation service that keeps a source-agnostic ledger of active work across GitHub repositories, and later Jira and Confluence. Its first job is to produce a reliable status overview feed for a local Hermes agent, which can then post real-time updates to Slack.
+A local-first work-observation service for engineering teams. It ingests GitHub and Jira events, reconciles them with implementation-plan documents and Confluence changes, and maintains a SQLite-backed ledger of work, milestones, blockers, and evidence.
 
-The core idea is simple: GitHub, Jira, and Confluence are event and context sources, but the canonical "book of work" lives locally. The local ledger tracks active tasks, implementation plans, linked pull requests, CI state, requirement changes, blockers, and milestones.
+The meta-agent is an observer, not a system of record: GitHub, Jira, Confluence, and the plan documents remain authoritative. Agent-reported events are stored as evidence and become verified only after deterministic reconciliation or a manual override.
 
-## Goals
+## What it does today
 
-- Track active engineering work across multiple repositories and tools.
-- Compare observed progress against implementation plans.
-- Detect achieved milestones from task plans and checklists.
-- Alert on blockers such as broken pipelines, stalled reviews, or changed requirements.
-- Feed concise real-time and periodic updates into Hermes.
-- Keep the architecture source-agnostic so Jira and Confluence can be added without redesigning the core.
+- Verifies and records GitHub and Jira webhook deliveries idempotently.
+- Normalizes GitHub issues, pull requests, reviews, workflow runs, and check runs into work items, blockers, and milestones.
+- Reconciles configured GitHub repositories, including configured implementation-plan documents and recently completed pull requests.
+- Parses deterministic `## Implementation Plan` checkbox transitions and emits milestone evidence.
+- Reconciles selected Confluence content and reports requirement drift only when it affects active GitHub work.
+- Delivers low-noise blocker, milestone, review, plan-update, and digest messages to Hermes through a signed webhook.
+- Provides a localhost dashboard and JSON APIs for active work, recent work, repository scope, and append-only agent evidence.
+- Supports macOS `launchd` supervision and a Helm deployment with an API and worker sidecar.
 
-## Non-Goals
+The current implementation roadmap and completed phases are maintained in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
-- Replacing GitHub Projects, Jira, or Confluence as the system of record.
-- Automatically mutating external systems in the first version.
-- Inferring every task from unstructured activity with no explicit work item or plan.
-- Building a full project-management UI before the event pipeline and ledger are useful.
-
-## High-Level Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
-  GH["GitHub App Webhooks"] --> Q["Event Queue"]
-  Q --> DB["Work Ledger DB"]
-  Poller["GitHub GraphQL Poller"] --> DB
-  Parser["Plan / Checklist Parser"] --> DB
-  Agent["Meta-Agent Summarizer"] --> Hermes["Local Hermes Agent"]
-  Hermes --> Slack["Personal Slack Channel"]
-  DB --> Dashboard["Optional Local Dashboard"]
+  GH[GitHub webhooks and reconciliation] --> Ledger[SQLite work ledger]
+  Jira[Jira webhooks] --> Ledger
+  Conf[Confluence reconciliation] --> Ledger
+  Plans[Implementation plan documents] --> Ledger
+  Agents[Hermes and other agents] --> Evidence[Append-only agent evidence]
+  Evidence --> Ledger
+  Ledger --> API[Local API and status views]
+  Ledger --> Hermes[Signed Hermes webhook]
 ```
 
-The first implementation should be local-first:
+The worker can be plan-document-driven: configure plan-document repositories and paths so plans are the durable program source of truth, while GitHub pull requests, workflow results, and webhooks provide linked evidence.
 
-- GitHub webhooks and/or polling provide repository events.
-- A local database stores normalized work items, source snapshots, plans, and milestone events.
-- A summarizer turns raw state changes into short status messages.
-- Hermes handles Slack delivery.
+## Requirements
 
-## Source Adapter Model
+- Node.js 22 or later
+- pnpm 11.1.1 (declared in `package.json`)
+- GitHub App credentials and webhook secret for GitHub ingestion
+- Optional Jira and Confluence credentials for their respective adapters
 
-The system should treat GitHub, Jira, and Confluence as adapters that emit normalized items and changes.
+## Local quick start
 
-```mermaid
-flowchart LR
-  GH["GitHub Adapter"] --> N["Normalizer"]
-  Jira["Jira Adapter"] --> N
-  Conf["Confluence Adapter"] --> N
-  N --> DB["Work Ledger"]
-  DB --> Agent["Status / Drift Agent"]
-  Agent --> Hermes["Hermes"]
-  Hermes --> Slack["Slack"]
+1. Create local configuration. Never commit `.env`, private keys, or SQLite data.
+
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Set the required values in `.env`. For a minimal API startup, set the database path and port. Configure the GitHub webhook secret before accepting GitHub deliveries.
+
+3. Install, migrate, build, and run the verification suite.
+
+   ```sh
+   corepack enable
+   corepack prepare pnpm@11.1.1 --activate
+   pnpm install --frozen-lockfile
+   pnpm db:migrate
+   pnpm build
+   pnpm check
+   pnpm test
+   pnpm format
+   ```
+
+4. Start the built API from the repository root. Production operation deliberately uses built output rather than `dev:api`, which runs a TypeScript watcher.
+
+   ```sh
+   set -a
+   . ./.env
+   set +a
+   META_AGENT_ROOT="$(pwd)" NODE_PATH="$(pwd)/node_modules" node apps/api/dist/index.js
+   ```
+
+5. In a second terminal, start the worker with the same environment.
+
+   ```sh
+   set -a
+   . ./.env
+   set +a
+   META_AGENT_ROOT="$(pwd)" NODE_PATH="$(pwd)/node_modules" node apps/worker/dist/index.js
+   ```
+
+6. Verify the local API.
+
+   ```sh
+   curl -sS http://127.0.0.1:4317/health
+   curl -sS http://127.0.0.1:4317/api/active-work
+   curl -sS http://127.0.0.1:4317/api/recent-work
+   ```
+
+For durable macOS-hosted operation, use `launchd` rather than background terminal processes. See [`docs/LAUNCHD_SUPERVISION.md`](docs/LAUNCHD_SUPERVISION.md).
+
+## Configuration
+
+All runtime configuration uses the `META_AGENT_` prefix. Start from [`.env.example`](.env.example).
+
+Common settings:
+
+- `META_AGENT_DATABASE_URL` — SQLite database location.
+- `META_AGENT_API_HOST` and `META_AGENT_API_PORT` — API bind address and port. The default is `127.0.0.1:4317`.
+- `META_AGENT_GITHUB_WEBHOOK_SECRET` — required to verify GitHub webhook signatures.
+- `META_AGENT_GITHUB_APP_ID`, `META_AGENT_GITHUB_PRIVATE_KEY_PATH`, and `META_AGENT_GITHUB_INSTALLATION_ID` — GitHub App integration.
+- `META_AGENT_HERMES_ENDPOINT` and `META_AGENT_HERMES_WEBHOOK_SECRET` — optional signed delivery to Hermes.
+- `META_AGENT_JIRA_URL`, `META_AGENT_JIRA_PAT`, and `META_AGENT_JIRA_WEBHOOK_SECRET` — Jira adapter and webhook support.
+- `META_AGENT_AGENT_EVENT_TOKEN` — protects `POST /api/agent-events` when that endpoint is exposed beyond trusted local use.
+- `META_AGENT_STATUS_AUTH_USERNAME` and `META_AGENT_STATUS_AUTH_PASSWORD` — required when accessing `/status` through a public tunnel.
+
+Keep the API bound to localhost. If GitHub must reach it, expose only the webhook proxy through a tunnel; the public host guard blocks dashboard and general API access. Webhook signature verification, body limits, rate limiting, and delivery idempotency are enforced by the API.
+
+## Interfaces
+
+Local browser views:
+
+- `/dashboard` — work-item and blocker dashboard.
+- `/status` — compact operational overview.
+
+JSON endpoints:
+
+- `GET /health` and `GET /api/health` — service health.
+- `GET /api/active-work` — open work items within configured scope.
+- `GET /api/recent-work` — plan documents and recently merged or closed pull requests.
+- `GET /api/repos` — configured repository scope.
+- `GET /api/agent-contract` and `GET /api/agent-events` — agent-evidence contract and recent evidence.
+- `POST /api/agent-events` — append-only evidence intake.
+
+Webhook endpoints:
+
+- `POST /webhooks/github` — requires GitHub's `X-Hub-Signature-256`, event, and delivery headers.
+- `POST /webhooks/jira` — requires the configured Jira webhook secret header.
+
+See [`docs/agent-ledger-contracts.md`](docs/agent-ledger-contracts.md) before publishing agent events. Agent claims are not verified ledger truth on their own.
+
+## Deployment
+
+### macOS host
+
+The operational stack is a set of `launchd` services for the API, worker, webhook-only proxy, public tunnel, and GitHub App webhook URL patcher. Install or reload it from a built checkout:
+
+```sh
+pnpm build
+scripts/supervisor/install-launchd.sh --skip-build
 ```
 
-## Core Concepts
+Follow the reboot recovery and end-to-end validation instructions in [`docs/LAUNCHD_SUPERVISION.md`](docs/LAUNCHD_SUPERVISION.md).
 
-### Work Item
+### Kubernetes
 
-A work item is a normalized representation of a task, story, issue, pull request, ADR, or requirement page.
+The `helm/` directory supplies deployment values for an API container and worker sidecar that share SQLite storage. See [`helm/README.md`](helm/README.md) for image, release, secret, and GitOps configuration.
 
-```text
-Work Item
-- id
-- source: github | jira | confluence | local
-- external_id
-- external_url
-- kind: issue | pull_request | story | task | doc | adr | requirement
-- title
-- status
-- owner
-- priority
-- plan
-- requirements
-- linked_code_artifacts
-- linked_docs
-- blockers
-- last_observed_change
+GitHub Actions runs build, test, formatting, and container-image smoke verification. Keep publishing credentials and registry-specific workflows private.
+
+## Development commands
+
+```sh
+pnpm build          # TypeScript project builds
+pnpm check          # TypeScript checks
+pnpm test           # build, then Vitest
+pnpm format         # Prettier check
+pnpm db:generate    # generate a Drizzle migration after schema changes
+pnpm db:migrate     # apply SQLite migrations
+pnpm agent:event    # publish a structured agent-evidence event
 ```
 
-### Source Change
+## Roadmap
 
-A source change is an observed event from an external system.
+Implemented foundations include the source-agnostic ledger, plan parser, GitHub ingestion and reconciliation, Hermes delivery, active-work APIs, dashboard, Jira webhook adapter, Confluence reconciliation, and agent/ledger transparency contracts.
 
-Examples:
+The next planned work is Phase 9: evidence-preserving summarization and classification. Phase 10 write-back remains intentionally deferred until read-only tracking is proven reliable and every external mutation can be explicitly approved and audited.
 
-- A GitHub pull request is opened, merged, marked ready for review, or receives review feedback.
-- A GitHub Actions workflow fails or recovers.
-- A Jira story changes status, assignee, sprint, or acceptance criteria.
-- A Confluence ADR or requirements page changes after implementation has started.
+For details, constraints, and acceptance criteria, read [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
-### Agent Event
-
-An agent event is append-only telemetry/evidence from Hermes or another agent. Agent events provide context and correlation hints, but they are not final ledger truth by themselves.
-
-Examples:
-
-- Hermes started work on a task and linked it to a plan document.
-- Hermes opened a PR and reported the branch, PR URL, and related plan items.
-- Hermes observed tests passing or runtime state becoming healthy.
-- Hermes suspects a plan row is stale and needs verification.
-
-The contract is documented in [`docs/agent-ledger-contracts.md`](docs/agent-ledger-contracts.md). Agents publish events to `POST /api/agent-events` directly or through `pnpm agent:event`; humans and integrations can inspect the contract at `GET /api/agent-contract` and recent events at `GET /api/agent-events`. Status views should distinguish `agent_claimed`, `agent_observed`, `system_observed`, `verified`, and `manual_override` evidence. The worker may upgrade agent evidence to `system_observed` or `verified` only after deterministic GitHub/workflow reconciliation confirms the claim.
-
-### Plan
-
-Plans should be parsed from machine-readable markdown where possible.
-
-```md
-## Implementation Plan
-
-- [ ] Add webhook ingestion
-- [ ] Store events in SQLite
-- [ ] Publish Hermes digest
-- [ ] Add CI failure summaries
-```
-
-The parser should prefer deterministic signals, such as checkbox changes, over language-model inference. LLM summarization can help explain changes, but it should not be the primary source of truth for milestone detection.
-
-## Feed Types
-
-### Real-Time Alerts
-
-Real-time alerts should be sent when attention is needed.
-
-Examples:
-
-```text
-Blocked: example-service#211
-Pipeline failed on branch feat/webhook-ledger.
-Failing job: integration-tests.
-Current plan step: "Store events in SQLite".
-```
-
-```text
-Requirement drift: JIRA PROJ-482
-Linked Confluence page "Device Provisioning Requirements" changed after PR #211 opened.
-Changed section: "Timeout behavior".
-Suggested action: re-check implementation assumptions.
-```
-
-### Periodic Digest
-
-Periodic digests should provide a concise overview of active work.
-
-Example:
-
-```text
-Status update
-
-Milestones reached:
-- #184 completed "Webhook ingestion"; PR #211 is ready for review and CI passed.
-
-Blocked:
-- #176 has a failing integration-test pipeline.
-
-Needs attention:
-- #169 has had no activity for 2 days, but remains "In Progress".
-```
-
-## First Supported Sources
-
-### GitHub
-
-Initial support should focus on:
-
-- GitHub App authentication.
-- Webhook ingestion for issues, pull requests, reviews, comments, check runs, check suites, workflow runs, and pushes.
-- GraphQL reconciliation for GitHub Projects v2, linked issues, PR state, labels, milestones, and project fields.
-- Parsing implementation plans from GitHub issue and PR bodies.
-
-### Jira
-
-Jira should be added as a first-class work source after the GitHub MVP.
-
-Useful Jira signals:
-
-- Issue status transitions.
-- Sprint and epic linkage.
-- Assignee changes.
-- Acceptance criteria changes.
-- Comments mentioning blockers.
-- Links to GitHub PRs, branches, commits, and Confluence pages.
-
-### Confluence
-
-Confluence should be treated as a knowledge and requirements source rather than a primary task tracker.
-
-Useful Confluence signals:
-
-- ADR changes.
-- Requirements page changes.
-- Runbook updates.
-- Release note updates.
-- Meeting notes that mention active work items.
-
-The system should index selected spaces or pages, not every accessible Confluence page.
-
-## Local Components
+## Repository layout
 
 ```text
 apps/
-  api/              Local HTTP API and webhook receiver
-  worker/           Event processing, polling, summarization
-  dashboard/        Optional local web UI
-
+  api/             Fastify API, dashboard, and webhook receivers
+  worker/          Reconciliation and digest worker
 packages/
-  adapters/         GitHub, Jira, Confluence adapters
-  core/             Domain model, ledger services, plan parser
-  hermes/           Hermes client integration
-  storage/          Database schema and repositories
+  core/            Source-agnostic domain types
+  storage/         SQLite/Drizzle schema and repository layer
+  github-adapter/  GitHub event normalization
+  jira-adapter/    Jira webhook normalization and client interfaces
+  confluence-adapter/ Confluence client and normalization
+  plan-parser/     Deterministic implementation-plan parsing
+  work-catalog/    Repository, plan, PR, Confluence, and drift reconciliation
+  hermes/          Signed Hermes webhook client
+helm/              Shared-chart deployment values
+scripts/           Agent-event and supervisor helpers
+docs/              Design, contracts, scope, roadmap, and runbooks
 ```
 
-This layout is provisional. The implementation plan should validate whether a monorepo-style structure is warranted before scaffolding code.
+## Related documentation
 
-## Development
-
-The repository uses a pnpm workspace with TypeScript project references.
-
-```sh
-pnpm install
-pnpm check
-pnpm test
-pnpm db:generate
-pnpm db:migrate
-pnpm dev:api
-pnpm dev:worker
-```
-
-Local configuration starts from `.env.example`.
-
-```sh
-cp .env.example .env
-```
-
-The default API health endpoint is:
-
-```text
-http://127.0.0.1:4317/health
-```
-
-The GitHub webhook endpoint is:
-
-```text
-POST http://127.0.0.1:4317/webhooks/github
-```
-
-For GitHub App setup through a tunnel, configure the public webhook URL as:
-
-```text
-https://<your-ngrok-or-tunnel-domain>/webhooks/github
-```
-
-Set the same webhook secret in GitHub and local configuration:
-
-```env
-META_AGENT_GITHUB_WEBHOOK_SECRET=...
-```
-
-Incoming GitHub webhook deliveries are rejected unless the `X-Hub-Signature-256` signature matches the configured secret. Accepted deliveries are recorded in the local ledger as source changes.
-
-## Open Design Questions
-
-- Should Hermes receive events over HTTP, a local queue, or a file-based inbox?
-- Should the first database be SQLite for portability or Postgres for richer querying?
-- Should GitHub polling be mandatory for reconciliation, even when webhooks are available?
-- How should active work be discovered: GitHub Projects, assigned issues, branch naming conventions, or explicit config?
-- How much write-back should be allowed later, such as Jira comments or GitHub issue updates?
-
-## Current Status
-
-Phase 0 is scaffolded with a TypeScript/pnpm workspace, local configuration loading, Fastify API shell, worker shell, Drizzle migrations, SQLite storage, Vitest tests, and basic domain types. The first GitHub webhook intake route is also available. The next step is Phase 1: implementing the source-agnostic core ledger model.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — phase roadmap and status.
+- [`docs/agent-ledger-contracts.md`](docs/agent-ledger-contracts.md) — agent evidence contract and truth model.
+- [`docs/source-scoping.md`](docs/source-scoping.md) — repository scoping and deployment tiers.
+- [`docs/LAUNCHD_SUPERVISION.md`](docs/LAUNCHD_SUPERVISION.md) — durable macOS operation and recovery.
+- [`helm/README.md`](helm/README.md) — Kubernetes deployment values and required secrets.
