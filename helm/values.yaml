@@ -1,4 +1,4 @@
-# Base values for meta-agent deployment using generic-service-chart
+# Base values for meta-agent deployment using proj-common-helm-chart
 #
 # Single-pod deployment with two containers:
 #   - API:    FastAPI webhook receiver (main container, port 4317)
@@ -11,7 +11,7 @@ app:
   name: "meta-agent"
   version: "0.1.0"
   environment: "dev"
-  team: "engineering"
+  team: "platform"
 
 # ─── Image ──────────────────────────────────────────────────────────────
 image:
@@ -192,14 +192,14 @@ deployment.sidecarContainers:
         mountPath: /tmp
 
 # ─── HTTPRoute (Gateway API) ──────────────────────────────────────────
-# Uses the shared edge-gateway for webhook reception.
+# Uses the shared platform-gateway for webhook reception.
 httproute:
   enabled: true
   httproutes:
     - name: api-route
       parentRefs:
-        - name: edge-gateway
-          namespace: ingress-system
+        - name: platform-gateway
+          namespace: platform
       hostnames:
         - "meta-agent.example.com"
       rules:
@@ -214,7 +214,7 @@ httproute:
 # ─── Network Policy (Cilium) ──────────────────────────────────────────
 networkPolicy:
   enabled: true
-  # Auto-generated rules: edge-gateway ingress + DNS egress
+  # Auto-generated rules: platform-gateway ingress + DNS egress
   # Additional egress: GitHub API, Jira, Confluence, Hermes, LLM
   ingress: []
   egress:

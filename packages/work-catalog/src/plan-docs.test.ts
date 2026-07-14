@@ -26,9 +26,9 @@ afterEach(() => {
 function plan(overrides: Partial<PlanDocument> = {}): PlanDocument {
   return {
     repo: "example-org/example-service",
-    path: "docs/product-cost-transparency-plan.md",
-    title: "Product Cost Transparency Plan",
-    body: `# Product Cost Transparency Plan
+    path: "docs/platform-cost-transparency-plan.md",
+    title: "Platform Cost Transparency Plan",
+    body: `# Platform Cost Transparency Plan
 
 ## Current Status
 
@@ -46,7 +46,7 @@ function plan(overrides: Partial<PlanDocument> = {}): PlanDocument {
 Related work: #1, #302, and https://github.com/example-org/example-service/pull/415
 `,
     htmlUrl:
-      "https://github.com/example-org/example-service/blob/main/docs/product-cost-transparency-plan.md",
+      "https://github.com/example-org/example-service/blob/main/docs/platform-cost-transparency-plan.md",
     updatedAt: "2026-06-12T12:00:00Z",
     ...overrides
   };
@@ -69,8 +69,8 @@ function pr(overrides: Partial<GitHubPr> = {}): GitHubPr {
   return {
     kind: "pull_request",
     number: 415,
-    title: "docs(cost): evaluate product portal showback path",
-    body: "Updates docs/product-cost-transparency-plan.md",
+    title: "docs(cost): evaluate platform portal showback path",
+    body: "Updates docs/platform-cost-transparency-plan.md",
     htmlUrl: "https://github.com/example-org/example-service/pull/415",
     state: "closed",
     mergedAt: "2026-06-12T10:43:09Z",
@@ -114,7 +114,7 @@ describe("parsePlanDocument", () => {
 
 | Task | Status | Notes |
 |---|---|---|
-| CNPG ApplicationSet | Implemented | Replaced by static product database ApplicationSet. |
+| CNPG ApplicationSet | Implemented | Replaced by static platform database ApplicationSet. |
 | Database GitOps | Runtime verified | ArgoCD app is healthy. |
 | Old failing workflow | Superseded | New workflow is green. |
 `
@@ -135,17 +135,17 @@ describe("reconcilePlanDocuments", () => {
     const item = getWorkItem(
       db,
       "github",
-      "plan:example-org/example-service:docs/product-cost-transparency-plan.md"
+      "plan:example-org/example-service:docs/platform-cost-transparency-plan.md"
     );
     expect(item).toBeTruthy();
     expect(item?.kind).toBe("plan");
     expect(item?.status).toBe("open");
-    expect(item?.title).toBe("Product Cost Transparency Plan");
+    expect(item?.title).toBe("Platform Cost Transparency Plan");
     expect(item?.body).toContain("Status rows: 3");
 
     const digest = buildStatusDigest(db);
     expect(digest.body).toContain("*Plan-driven work:*");
-    expect(digest.body).toContain("Product Cost Transparency Plan");
+    expect(digest.body).toContain("Platform Cost Transparency Plan");
     expect(digest.body).toContain("1/2 checklist items complete");
     expect(digest.body).toContain("AKS tier / AKS Cost Analysis: Pilot");
     expect(digest.body).not.toContain("CNPG ApplicationSet");
@@ -170,9 +170,9 @@ describe("reconcilePlanDocuments", () => {
     });
 
     expect(hermes.messages.map((message) => message.category)).toEqual(["plan_updated"]);
-    expect(hermes.messages[0].title).toContain("Product Cost Transparency Plan");
+    expect(hermes.messages[0].title).toContain("Platform Cost Transparency Plan");
     expect(hermes.messages[0].dedupKey).toBe(
-      "plan_updated:plan:example-org/example-service:docs/product-cost-transparency-plan.md:2026-06-12T13:00:00Z"
+      "plan_updated:plan:example-org/example-service:docs/platform-cost-transparency-plan.md:2026-06-12T13:00:00Z"
     );
   });
 
@@ -210,7 +210,7 @@ describe("recent merged PR reconciliation", () => {
 
     const digest = buildStatusDigest(db);
     expect(digest.body).toContain("*Recently completed PRs:*");
-    expect(digest.body).toContain("docs(cost): evaluate product portal showback path");
+    expect(digest.body).toContain("docs(cost): evaluate platform portal showback path");
   });
 });
 

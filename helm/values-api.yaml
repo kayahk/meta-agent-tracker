@@ -22,10 +22,10 @@ secret:
   stringData:
     hermes-endpoint: ""
     hermes-webhook-secret: ""
-    github-app-id: "<github-app-id>"
+    github-app-id: "123456"
     github-private-key-path: "/secrets/github-key.pem"
     github-webhook-secret: ""
-    github-installation-id: "<github-installation-id>"
+    github-installation-id: "123456789"
     github-repositories: "example-org/meta-agent-tracker"
     github-assigned-to: "example-user"
     jira-url: ""

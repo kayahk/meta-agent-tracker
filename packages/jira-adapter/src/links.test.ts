@@ -5,7 +5,7 @@ import { extractJiraIssueKeys, syncJiraLinks } from "./index.js";
 
 describe("extractJiraIssueKeys", () => {
   it("finds Jira keys in free text and dedupes", () => {
-    const keys = extractJiraIssueKeys("Implements PROJ-482 and example-482, also ABC-1");
+    const keys = extractJiraIssueKeys("Implements PROJ-482 and proj-482, also ABC-1");
     expect(keys).toContain("PROJ-482");
     expect(keys).toContain("ABC-1");
     expect(keys.filter((k) => k === "PROJ-482")).toHaveLength(1);

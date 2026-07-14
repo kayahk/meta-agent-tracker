@@ -1,139 +1,274 @@
-# Meta Agent Tracker
+# Meta Agent
 
-Meta Agent Tracker is a local-first work-observability service. It ingests events and reconciliation data from tools such as GitHub, Jira, Confluence, and workflow systems, normalizes them into a source-agnostic SQLite ledger, and emits concise status, blocker, milestone, and drift notifications to a delivery channel such as Hermes/Slack.
+Meta Agent is a local work-observation service that keeps a source-agnostic ledger of active work across GitHub repositories, and later Jira and Confluence. Its first job is to produce a reliable status overview feed for a local Hermes agent, which can then post real-time updates to Slack.
 
-The project is designed to be environment-agnostic: all organization names, repository allowlists, credentials, webhook secrets, and delivery endpoints are configured at runtime through environment variables or deployment secrets.
+The core idea is simple: GitHub, Jira, and Confluence are event and context sources, but the canonical "book of work" lives locally. The local ledger tracks active tasks, implementation plans, linked pull requests, CI state, requirement changes, blockers, and milestones.
 
-## What it tracks
+## Goals
 
-- Active GitHub issues and pull requests.
-- Implementation-plan markdown documents and checklist milestones.
-- GitHub Actions/check-run blockers and recoveries.
-- Jira issue state and GitHub/Jira drift.
-- Confluence requirement-page changes and linked-work drift.
-- Agent-reported evidence that can later be verified against deterministic source data.
-- Optional model-assisted link proposals; proposed links are advisory and never authoritative by themselves.
+- Track active engineering work across multiple repositories and tools.
+- Compare observed progress against implementation plans.
+- Detect achieved milestones from task plans and checklists.
+- Alert on blockers such as broken pipelines, stalled reviews, or changed requirements.
+- Feed concise real-time and periodic updates into Hermes.
+- Keep the architecture source-agnostic so Jira and Confluence can be added without redesigning the core.
 
-## Architecture
+## Non-Goals
+
+- Replacing GitHub Projects, Jira, or Confluence as the system of record.
+- Automatically mutating external systems in the first version.
+- Inferring every task from unstructured activity with no explicit work item or plan.
+- Building a full project-management UI before the event pipeline and ledger are useful.
+
+## High-Level Architecture
 
 ```mermaid
 flowchart LR
-  GH[GitHub App Webhooks / API] --> API[Fastify API]
-  Jira[Jira Webhooks / API] --> API
-  Conf[Confluence API] --> Worker[Worker Reconciler]
-  API --> DB[(SQLite Ledger)]
-  Worker --> DB
-  DB --> Digest[Status / Drift Digest]
-  Digest --> Hermes[Hermes Webhook]
-  Hermes --> Channel[Slack or another channel]
+  GH["GitHub App Webhooks"] --> Q["Event Queue"]
+  Q --> DB["Work Ledger DB"]
+  Poller["GitHub GraphQL Poller"] --> DB
+  Parser["Plan / Checklist Parser"] --> DB
+  Agent["Meta-Agent Summarizer"] --> Hermes["Local Hermes Agent"]
+  Hermes --> Slack["Personal Slack Channel"]
+  DB --> Dashboard["Optional Local Dashboard"]
 ```
 
-Core packages:
+The first implementation should be local-first:
 
-- `packages/core` — shared normalized domain types.
-- `packages/storage` — SQLite/Drizzle schema and repository helpers.
-- `packages/config` — Zod-validated runtime configuration.
-- `packages/github` — GitHub webhook signature verification.
-- `packages/github-adapter` — GitHub webhook normalization.
-- `packages/work-catalog` — GitHub API reconciliation, plan-document scans, workflow reconciliation, drift detection, and digest delivery.
-- `packages/jira-adapter` — Jira webhook/client abstractions and normalization.
-- `packages/confluence-adapter` — Confluence client and page normalization.
-- `packages/hermes` — optional Hermes webhook delivery client.
-- `packages/llm-client` — optional advisory semantic matching.
+- GitHub webhooks and/or polling provide repository events.
+- A local database stores normalized work items, source snapshots, plans, and milestone events.
+- A summarizer turns raw state changes into short status messages.
+- Hermes handles Slack delivery.
 
-Apps:
+## Source Adapter Model
 
-- `apps/api` — Fastify server, webhook receiver, status endpoints, and local dashboard/status pages.
-- `apps/worker` — periodic reconciliation worker.
+The system should treat GitHub, Jira, and Confluence as adapters that emit normalized items and changes.
 
-## Quick start
-
-Prerequisites:
-
-- Node.js 22+
-- pnpm 11+
-
-```bash
-pnpm install --frozen-lockfile
-cp .env.example .env
-pnpm db:migrate
-pnpm test
-pnpm build
-META_AGENT_ROOT=$(pwd) NODE_PATH=$(pwd)/node_modules node apps/api/dist/index.js
+```mermaid
+flowchart LR
+  GH["GitHub Adapter"] --> N["Normalizer"]
+  Jira["Jira Adapter"] --> N
+  Conf["Confluence Adapter"] --> N
+  N --> DB["Work Ledger"]
+  DB --> Agent["Status / Drift Agent"]
+  Agent --> Hermes["Hermes"]
+  Hermes --> Slack["Slack"]
 ```
 
-In a second shell, run the worker:
+## Core Concepts
 
-```bash
-META_AGENT_ROOT=$(pwd) NODE_PATH=$(pwd)/node_modules node apps/worker/dist/index.js
+### Work Item
+
+A work item is a normalized representation of a task, story, issue, pull request, ADR, or requirement page.
+
+```text
+Work Item
+- id
+- source: github | jira | confluence | local
+- external_id
+- external_url
+- kind: issue | pull_request | story | task | doc | adr | requirement
+- title
+- status
+- owner
+- priority
+- plan
+- requirements
+- linked_code_artifacts
+- linked_docs
+- blockers
+- last_observed_change
 ```
 
-Health check:
+### Source Change
 
-```bash
-curl -s http://127.0.0.1:4317/health
+A source change is an observed event from an external system.
+
+Examples:
+
+- A GitHub pull request is opened, merged, marked ready for review, or receives review feedback.
+- A GitHub Actions workflow fails or recovers.
+- A Jira story changes status, assignee, sprint, or acceptance criteria.
+- A Confluence ADR or requirements page changes after implementation has started.
+
+### Agent Event
+
+An agent event is append-only telemetry/evidence from Hermes or another agent. Agent events provide context and correlation hints, but they are not final ledger truth by themselves.
+
+Examples:
+
+- Hermes started work on a task and linked it to a plan document.
+- Hermes opened a PR and reported the branch, PR URL, and related plan items.
+- Hermes observed tests passing or runtime state becoming healthy.
+- Hermes suspects a plan row is stale and needs verification.
+
+The contract is documented in [`docs/agent-ledger-contracts.md`](docs/agent-ledger-contracts.md). Agents publish events to `POST /api/agent-events` directly or through `pnpm agent:event`; humans and integrations can inspect the contract at `GET /api/agent-contract` and recent events at `GET /api/agent-events`. Status views should distinguish `agent_claimed`, `agent_observed`, `system_observed`, `verified`, and `manual_override` evidence. The worker may upgrade agent evidence to `system_observed` or `verified` only after deterministic GitHub/workflow reconciliation confirms the claim.
+
+### Plan
+
+Plans should be parsed from machine-readable markdown where possible.
+
+```md
+## Implementation Plan
+
+- [ ] Add webhook ingestion
+- [ ] Store events in SQLite
+- [ ] Publish Hermes digest
+- [ ] Add CI failure summaries
 ```
 
-Demo the product without live integrations:
+The parser should prefer deterministic signals, such as checkbox changes, over language-model inference. LLM summarization can help explain changes, but it should not be the primary source of truth for milestone detection.
 
-- Browser page: <http://127.0.0.1:4317/demo/notifications>
-- JSON payloads: <http://127.0.0.1:4317/api/demo/notifications>
-- Walkthrough: [`docs/DEMO_NOTIFICATIONS.md`](docs/DEMO_NOTIFICATIONS.md)
+## Feed Types
 
-## Configuration
+### Real-Time Alerts
 
-All configuration is runtime-provided. Do not commit `.env`, private keys, tokens, webhook secrets, SQLite databases, or logs.
+Real-time alerts should be sent when attention is needed.
 
-Important environment variables:
+Examples:
 
-- `META_AGENT_DATABASE_URL` — SQLite database path; default `./data/meta-agent.sqlite`.
-- `META_AGENT_API_HOST` / `META_AGENT_API_PORT` — API bind address and port.
-- `META_AGENT_SCAN_INTERVAL_MS` — worker scan interval; default one hour.
-- `META_AGENT_HERMES_ENDPOINT` / `META_AGENT_HERMES_WEBHOOK_SECRET` — optional outbound delivery.
-- `META_AGENT_AGENT_EVENT_TOKEN` — optional bearer token for agent event ingestion.
-- `META_AGENT_GITHUB_APP_ID`, `META_AGENT_GITHUB_PRIVATE_KEY_PATH`, `META_AGENT_GITHUB_INSTALLATION_ID`, `META_AGENT_GITHUB_WEBHOOK_SECRET` — GitHub App/webhook config.
-- `META_AGENT_GITHUB_REPOSITORIES` — optional comma-separated repository allowlist (`owner/repo`). Omit to use repositories visible to the configured GitHub App installation(s).
-- `META_AGENT_GITHUB_ASSIGNED_TO` — optional comma-separated assignee filter.
-- `META_AGENT_GITHUB_PLAN_REPOSITORIES` — optional comma-separated list of repos whose docs should be scanned for plan documents. Omit to scan the configured repo set.
-- `META_AGENT_GITHUB_PLAN_DOCS_PATH` — docs directory used for plan discovery; default `docs`.
-- `META_AGENT_JIRA_*` — optional Jira Cloud client/webhook settings.
-- `META_AGENT_CONFLUENCE_*` — optional Confluence settings.
-- `META_AGENT_LLM_*` — optional advisory semantic matching settings.
+```text
+Blocked: example-service#211
+Pipeline failed on branch feat/webhook-ledger.
+Failing job: integration-tests.
+Current plan step: "Store events in SQLite".
+```
 
-See `.env.example` for a complete template.
+```text
+Requirement drift: JIRA PROJ-482
+Linked Confluence page "Device Provisioning Requirements" changed after PR #211 opened.
+Changed section: "Timeout behavior".
+Suggested action: re-check implementation assumptions.
+```
 
-## Secrets policy
+### Periodic Digest
 
-- Secrets are read only from environment variables or files referenced by environment variables.
-- The repository ignores `.env*` except `.env.example`, key material, database files, logs, and build output.
-- Helm values and docs use placeholders only; use your deployment platform's secret manager for real values.
-- The public repository is intentionally created from a sanitized working tree, not from private repository history.
+Periodic digests should provide a concise overview of active work.
 
-## Extension points
+Example:
 
-The service is intentionally pluggable:
+```text
+Status update
 
-- Add source adapters that emit normalized `WorkItem`/`SourceChange` records.
-- Add delivery adapters by implementing the `HermesClient`-style `send()` contract.
-- Add new reconciliation passes inside the worker without changing webhook ingestion.
-- Add MCP or communication-channel integrations as separate packages/apps while keeping credentials in runtime config.
-- Keep model-assisted correlations advisory unless a deterministic/manual process promotes them.
+Milestones reached:
+- #184 completed "Webhook ingestion"; PR #211 is ready for review and CI passed.
+
+Blocked:
+- #176 has a failing integration-test pipeline.
+
+Needs attention:
+- #169 has had no activity for 2 days, but remains "In Progress".
+```
+
+## First Supported Sources
+
+### GitHub
+
+Initial support should focus on:
+
+- GitHub App authentication.
+- Webhook ingestion for issues, pull requests, reviews, comments, check runs, check suites, workflow runs, and pushes.
+- GraphQL reconciliation for GitHub Projects v2, linked issues, PR state, labels, milestones, and project fields.
+- Parsing implementation plans from GitHub issue and PR bodies.
+
+### Jira
+
+Jira should be added as a first-class work source after the GitHub MVP.
+
+Useful Jira signals:
+
+- Issue status transitions.
+- Sprint and epic linkage.
+- Assignee changes.
+- Acceptance criteria changes.
+- Comments mentioning blockers.
+- Links to GitHub PRs, branches, commits, and Confluence pages.
+
+### Confluence
+
+Confluence should be treated as a knowledge and requirements source rather than a primary task tracker.
+
+Useful Confluence signals:
+
+- ADR changes.
+- Requirements page changes.
+- Runbook updates.
+- Release note updates.
+- Meeting notes that mention active work items.
+
+The system should index selected spaces or pages, not every accessible Confluence page.
+
+## Local Components
+
+```text
+apps/
+  api/              Local HTTP API and webhook receiver
+  worker/           Event processing, polling, summarization
+  dashboard/        Optional local web UI
+
+packages/
+  adapters/         GitHub, Jira, Confluence adapters
+  core/             Domain model, ledger services, plan parser
+  hermes/           Hermes client integration
+  storage/          Database schema and repositories
+```
+
+This layout is provisional. The implementation plan should validate whether a monorepo-style structure is warranted before scaffolding code.
 
 ## Development
 
-```bash
-pnpm check       # TypeScript
-pnpm test        # build + Vitest suite
-pnpm build       # workspace build
-pnpm format      # Prettier check
+The repository uses a pnpm workspace with TypeScript project references.
+
+```sh
+pnpm install
+pnpm check
+pnpm test
+pnpm db:generate
+pnpm db:migrate
+pnpm dev:api
+pnpm dev:worker
 ```
 
-Tests use local SQLite fixtures and mocked clients; they should not require live GitHub, Jira, Confluence, Hermes, Kubernetes, or ArgoCD access.
+Local configuration starts from `.env.example`.
 
-## Deployment
+```sh
+cp .env.example .env
+```
 
-The `helm/` directory contains generic example values for Kubernetes-style deployments. It is deliberately provider-neutral: replace hostnames, image repositories, and secret references with values for your own environment.
+The default API health endpoint is:
 
-## License
+```text
+http://127.0.0.1:4317/health
+```
 
-MIT — see [`LICENSE`](LICENSE).
+The GitHub webhook endpoint is:
+
+```text
+POST http://127.0.0.1:4317/webhooks/github
+```
+
+For GitHub App setup through a tunnel, configure the public webhook URL as:
+
+```text
+https://<your-ngrok-or-tunnel-domain>/webhooks/github
+```
+
+Set the same webhook secret in GitHub and local configuration:
+
+```env
+META_AGENT_GITHUB_WEBHOOK_SECRET=...
+```
+
+Incoming GitHub webhook deliveries are rejected unless the `X-Hub-Signature-256` signature matches the configured secret. Accepted deliveries are recorded in the local ledger as source changes.
+
+## Open Design Questions
+
+- Should Hermes receive events over HTTP, a local queue, or a file-based inbox?
+- Should the first database be SQLite for portability or Postgres for richer querying?
+- Should GitHub polling be mandatory for reconciliation, even when webhooks are available?
+- How should active work be discovered: GitHub Projects, assigned issues, branch naming conventions, or explicit config?
+- How much write-back should be allowed later, such as Jira comments or GitHub issue updates?
+
+## Current Status
+
+Phase 0 is scaffolded with a TypeScript/pnpm workspace, local configuration loading, Fastify API shell, worker shell, Drizzle migrations, SQLite storage, Vitest tests, and basic domain types. The first GitHub webhook intake route is also available. The next step is Phase 1: implementing the source-agnostic core ledger model.

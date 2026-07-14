@@ -18,14 +18,14 @@ for plist in scripts/launchd/*.plist; do
   label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist")"
   dest="$HOME/Library/LaunchAgents/$(basename "$plist")"
   case "$label" in
-    de.example.meta-agent.api) program="$repo_root/scripts/supervisor/api.sh" ;;
-    de.example.meta-agent.worker) program="$repo_root/scripts/supervisor/worker.sh" ;;
-    de.example.meta-agent.proxy) program="$repo_root/scripts/supervisor/proxy.sh" ;;
-    de.example.meta-agent.tunnel) program="$repo_root/scripts/supervisor/cloudflare-tunnel.sh" ;;
-    de.example.meta-agent.patch-webhook) program="$repo_root/scripts/supervisor/patch-current-webhook.sh" ;;
+    com.example.meta-agent.api) program="$repo_root/scripts/supervisor/api.sh" ;;
+    com.example.meta-agent.worker) program="$repo_root/scripts/supervisor/worker.sh" ;;
+    com.example.meta-agent.proxy) program="$repo_root/scripts/supervisor/proxy.sh" ;;
+    com.example.meta-agent.tunnel) program="$repo_root/scripts/supervisor/cloudflare-tunnel.sh" ;;
+    com.example.meta-agent.patch-webhook) program="$repo_root/scripts/supervisor/patch-current-webhook.sh" ;;
     *) echo "unknown LaunchAgent label in $plist: $label" >&2; exit 1 ;;
   esac
-  log_name="${label#de.example.meta-agent.}"
+  log_name="${label#com.example.meta-agent.}"
   launchctl bootout "gui/$(id -u)" "$dest" >/dev/null 2>&1 || true
   cp "$plist" "$dest"
   plist_set_string() {

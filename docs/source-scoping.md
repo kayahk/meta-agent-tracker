@@ -23,7 +23,7 @@ Meta-agent uses **two independent layers** to control which repos produce events
 1. **Install the GitHub App on the repo** (GitHub UI: App settings → Install → select repo)
 2. **Add the repo to the allowlist** in `.env`:
    ```env
-   META_AGENT_GITHUB_REPOSITORIES=example-user/meta-agent-tracker,other-org/other-repo
+   META_AGENT_GITHUB_REPOSITORIES=example-user/meta-agent,other-org/other-repo
    ```
 3. **Restart the API** (`pnpm build && node apps/api/dist/index.js`)
 
@@ -32,20 +32,20 @@ The allowlist is optional — when unset, all repos in the installation scope ar
 ### Current installation scope
 
 ```
-Installation <github-installation-id> on example-org (App ID <github-app-id>).
+Installation 123456789 on example-org (App ID 123456).
 App ownership transferred from example-user to example-org on 2026-05-20.
 
 Tracked repos (allowlist):
-  example-user/meta-agent-tracker
+  example-user/meta-agent
   example-org/example-service
-  example-org/example-registry
-  example-org/example-cloud-portal
-  example-org/observability-resources-chart
-  example-org/deployment-promotion-chart
-  example-org/kafka-resources-chart
-  example-org/generic-service-chart
-  example-org/database-resources-chart
-  example-org/cloud-resources-chart
+  example-org/proj-platform-registry
+  example-org/proj-cloud-platform-portal
+  example-org/proj-openobserve-resources-helm-chart
+  example-org/proj-kargo-helm-chart
+  example-org/proj-kafka-helm-chart
+  example-org/proj-common-helm-chart
+  example-org/proj-cnpg-database-helm-chart
+  example-org/proj-aso-resources-helm-chart
 ```
 
 Run this to check the current scope (requires `PyJWT` and `requests`):
@@ -54,7 +54,7 @@ Run this to check the current scope (requires `PyJWT` and `requests`):
 python3 /tmp/check_install.py
 ```
 
-**Note:** The app ownership transfer killed the old example-user installation (<previous-installation-id>). To track repos under both example-user and example-org simultaneously, either install the app separately on example-user (second installation, new ID — requires multi-installation config support) or rely on the single example-org installation.
+**Note:** The app ownership transfer killed the old example-user installation (987654321). To track repos under both example-user and example-org simultaneously, either install the app separately on example-user (second installation, new ID — requires multi-installation config support) or rely on the single example-org installation.
 
 ## Tiers
 
@@ -112,7 +112,7 @@ The adapter normalizes `issues`, `pull_request`, `workflow_run`, and `check_run`
 
 ```env
 # Comma-separated full_name values (org/repo)
-META_AGENT_GITHUB_REPOSITORIES=example/example-service,example/example-mgmt
+META_AGENT_GITHUB_REPOSITORIES=example/example-service,example/proj-mgmt
 ```
 
 When set, only webhooks from these repos are processed. When unset, all repos where the GitHub App is installed are tracked.

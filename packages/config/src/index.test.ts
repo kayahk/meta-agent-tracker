@@ -10,6 +10,8 @@ describe("loadConfig", () => {
     expect(config.hermes.endpoint).toBeUndefined();
     expect(config.github.planDocsPath).toBe("docs");
     expect(config.github.planRepositories).toBeUndefined();
+    expect(config.statusAuth.username).toBeUndefined();
+    expect(config.statusAuth.password).toBeUndefined();
   });
 
   it("parses optional generic repository and scan settings", () => {
@@ -18,7 +20,9 @@ describe("loadConfig", () => {
       META_AGENT_GITHUB_ASSIGNED_TO: "alice,bob",
       META_AGENT_GITHUB_PLAN_REPOSITORIES: "example-org/docs",
       META_AGENT_GITHUB_PLAN_DOCS_PATH: "planning",
-      META_AGENT_SCAN_INTERVAL_MS: "300000"
+      META_AGENT_SCAN_INTERVAL_MS: "300000",
+      META_AGENT_STATUS_AUTH_USERNAME: "status-user",
+      META_AGENT_STATUS_AUTH_PASSWORD: "status-password"
     });
 
     expect(config.github.repositories).toEqual(["example-org/api", "example-org/web"]);
@@ -26,5 +30,9 @@ describe("loadConfig", () => {
     expect(config.github.planRepositories).toEqual(["example-org/docs"]);
     expect(config.github.planDocsPath).toBe("planning");
     expect(config.scanIntervalMs).toBe(300000);
+    expect(config.statusAuth).toEqual({
+      username: "status-user",
+      password: "status-password"
+    });
   });
 });

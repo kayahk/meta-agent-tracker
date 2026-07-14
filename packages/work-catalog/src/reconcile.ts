@@ -268,7 +268,9 @@ export function buildStatusDigest(
 
   const milestones = getRecentMilestones(db, milestoneLimit);
   const blockers = getActiveBlockersWithItems(db);
-  const stale = getStaleWorkItems(db, staleDays);
+  const stale = getStaleWorkItems(db, staleDays).filter(
+    (item: { kind: string }) => item.kind !== "plan"
+  );
   const active = getActiveWorkItems(db, { limit: 1000 });
   const plans = getPlanWorkItems(db, 20);
   const recentMerged = getRecentMergedPullRequests(db, 10);

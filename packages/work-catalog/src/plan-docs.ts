@@ -65,7 +65,7 @@ export async function reconcilePlanDocuments(options: {
       kind: "plan",
       title: parsed.title,
       status: parsed.status,
-      owner: "unassigned",
+      owner: "platform",
       body,
       externalUrl: document.htmlUrl,
       updatedAt: new Date(document.updatedAt)

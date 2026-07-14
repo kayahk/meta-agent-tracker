@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { loadConfig } from "@meta-agent/config";
 import { verifyGitHubWebhookSignature } from "@meta-agent/github";
 import { HttpHermesClient, NoopHermesClient, type HermesClient } from "@meta-agent/hermes";
@@ -23,7 +24,6 @@ import {
   JIRA_WEBHOOK_SECRET_HEADER,
   type JiraClient
 } from "@meta-agent/jira-adapter";
-import { demoNotifications, renderDemoNotificationsPage } from "./demo-notifications.js";
 
 export interface BuildServerOptions {
   logger?: boolean;
@@ -53,24 +53,43 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onRequest", async (request, reply) => {
     // Block all non-webhook traffic coming through ngrok tunnels.
     // ngrok sets the Host header to its public domain; internal requests
-    // use 127.0.0.1 or localhost. Only GitHub POST webhooks pass through.
+    // use 127.0.0.1 or localhost. Webhooks pass through, and /status is
+    // exposed only when protected by configured Basic authentication.
     const host = (request.headers["host"] ?? "").toLowerCase();
-    const isNgrok = host.includes("ngrok");
+    const path = requestPathname(request.url);
+    const isPublicTunnel = isPublicTunnelHost(host);
 
-    if (isNgrok) {
-      // Only allow POST webhooks through the ngrok tunnel
+    if (isPublicTunnel) {
+      if (path === "/status" && request.method === "GET") {
+        const authResult = authorizeStatusRequest(
+          request.headers["authorization"],
+          config.statusAuth.username,
+          config.statusAuth.password
+        );
+
+        if (!authResult.ok) {
+          if (authResult.status === 401) {
+            reply.header("WWW-Authenticate", 'Basic realm="Meta Agent Status", charset="UTF-8"');
+          }
+          return reply.code(authResult.status).send({ ok: false, error: authResult.error });
+        }
+
+        return;
+      }
+
+      // Only allow POST webhooks through the ngrok tunnel without browser auth.
       const allowedPaths = ["/webhooks/github", "/webhooks/jira", "/api/agent-events"];
-      if (allowedPaths.includes(request.url) && request.method === "POST") {
+      if (allowedPaths.includes(path) && request.method === "POST") {
         return; // allowed
       }
       return reply.code(403).send({
         ok: false,
-        error: "This endpoint is not exposed through ngrok"
+        error: "This endpoint is not exposed through public tunnels"
       });
     }
 
     // Rate limiting: only for POST /webhooks/github
-    if (request.url !== "/webhooks/github" || request.method !== "POST") return;
+    if (path !== "/webhooks/github" || request.method !== "POST") return;
 
     const ip = request.ip;
     const now = Date.now();
@@ -164,7 +183,6 @@ export async function buildServer(options: BuildServerOptions = {}) {
       <p>The local API is running.</p>
       <p>
         Status overview: <a href="/status"><code>/status</code></a><br />
-        Demo notifications: <a href="/demo/notifications"><code>/demo/notifications</code></a><br />
         Dashboard: <a href="/dashboard"><code>/dashboard</code></a><br />
         Health: <a href="/health"><code>/health</code></a><br />
         API health: <a href="/api/health"><code>/api/health</code></a>
@@ -179,17 +197,6 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.get("/health", health);
   app.get("/api/health", health);
-
-  app.get("/demo/notifications", async (_request, reply) => {
-    reply.type("text/html; charset=utf-8");
-    return renderDemoNotificationsPage();
-  });
-
-  app.get("/api/demo/notifications", async () => ({
-    ok: true,
-    count: demoNotifications.length,
-    notifications: demoNotifications
-  }));
 
   // ── Dashboard ──────────────────────────────────────────────────
 
@@ -1010,6 +1017,62 @@ function authorizeAgentEvent(
     return { ok: false as const, status: 403, error: "Invalid bearer token" };
   }
   return { ok: true as const };
+}
+
+function isPublicTunnelHost(host: string) {
+  return host.includes("ngrok") || host.includes("trycloudflare");
+}
+
+function requestPathname(rawUrl: string) {
+  return rawUrl.split("?", 1)[0] || "/";
+}
+
+function authorizeStatusRequest(
+  header: string | string[] | undefined,
+  configuredUsername: string | undefined,
+  configuredPassword: string | undefined
+) {
+  if (!configuredUsername || !configuredPassword) {
+    return {
+      ok: false as const,
+      status: 503,
+      error: "Status page authentication is not configured"
+    };
+  }
+
+  const value = getRequiredHeader(header);
+  const basicPrefix = "Basic ";
+  if (!value || value.slice(0, basicPrefix.length).toLowerCase() !== basicPrefix.toLowerCase()) {
+    return { ok: false as const, status: 401, error: "Basic authentication required" };
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(value.slice(basicPrefix.length), "base64").toString("utf8");
+  } catch {
+    return { ok: false as const, status: 401, error: "Invalid Basic authentication header" };
+  }
+
+  const separator = decoded.indexOf(":");
+  if (separator < 0) {
+    return { ok: false as const, status: 401, error: "Invalid Basic authentication credentials" };
+  }
+
+  const username = decoded.slice(0, separator);
+  const password = decoded.slice(separator + 1);
+  if (!safeEqual(username, configuredUsername) || !safeEqual(password, configuredPassword)) {
+    return { ok: false as const, status: 401, error: "Invalid Basic authentication credentials" };
+  }
+
+  return { ok: true as const };
+}
+
+function safeEqual(actual: string, expected: string) {
+  const actualBuffer = Buffer.from(actual, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  return (
+    actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
+  );
 }
 
 function normalizeAgentEventPayload(payload: unknown) {
